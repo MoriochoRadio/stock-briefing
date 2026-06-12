@@ -36,7 +36,7 @@ llm:
   # provider 우선순위: 환경변수에 GEMINI_API_KEY 있으면 gemini, ANTHROPIC_API_KEY 있으면 anthropic
   gemini_model: "gemini-2.5-flash"
   anthropic_model: "claude-sonnet-4-6"
-  max_output_tokens: 4096
+  max_output_tokens: 8192
 
 site:
   title: "📈 아침 시장 브리핑"

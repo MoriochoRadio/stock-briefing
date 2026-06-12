@@ -58,7 +58,11 @@ def call_gemini(prompt, cfg, key):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": cfg["llm"]["max_output_tokens"]},
+        "generationConfig": {
+            "maxOutputTokens": cfg["llm"]["max_output_tokens"],
+            # thinking 토큰이 출력 한도를 잠식해 본문이 잘리는 것 방지
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
     }
     req = urllib.request.Request(
         url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
