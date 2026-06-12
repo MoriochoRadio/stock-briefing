@@ -1,37 +1,138 @@
 ---
 import history from "../data/history.json";
+import { TrendingUp, TrendingDown, Minus, Clock } from "@lucide/astro";
 
 const latest = history.length ? history[history.length - 1] : null;
-const fmt = (n) => n >= 1000 ? n.toLocaleString("ko-KR") : String(n);
+
+// 종목별 종가 히스토리 (스파크라인용)
+const closesByTicker = {};
+for (const snap of history) {
+  for (const q of snap.quotes) {
+    (closesByTicker[q.ticker] ??= []).push(q.close);
+  }
+}
+
+// 표시 소수 자릿수: 원본 값의 소수부 길이(최대 2)
+const decimalsOf = (n) => {
+  const s = String(n);
+  const i = s.indexOf(".");
+  return i < 0 ? 0 : Math.min(2, s.length - i - 1);
+};
+const fmt = (n) => {
+  const d = decimalsOf(n);
+  return n.toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+};
 const cls = (p) => (p > 0 ? "up" : p < 0 ? "down" : "flat");
-const arrow = (p) => (p > 0 ? "▲" : p < 0 ? "▼" : "—");
+
+// 스파크라인 SVG 경로 (2일 이상 누적 시)
+const W = 120, H = 34, PAD = 3;
+function sparkline(points) {
+  if (!points || points.length < 2) return null;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = (W - PAD * 2) / (points.length - 1);
+  const xy = points.map((p, i) => [
+    +(PAD + i * step).toFixed(2),
+    +(H - PAD - ((p - min) / span) * (H - PAD * 2)).toFixed(2),
+  ]);
+  const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x},${y}`).join(" ");
+  const area = `${line} L${xy[xy.length - 1][0]},${H} L${xy[0][0]},${H} Z`;
+  return { line, area };
+}
 ---
 
 {latest && (
-  <section class="quotes">
-    <p class="asof">시세 기준: {latest.date}</p>
+  <section class="quotes rise">
+    <p class="asof"><Clock size={13} /> 시세 기준: {latest.date}</p>
     <div class="grid">
-      {latest.quotes.map((q) => (
-        <div class="card quote">
-          <div class="name">{q.name}</div>
-          <div class="close">{fmt(q.close)}</div>
-          <div class={`chg ${cls(q.change_pct)}`}>
-            {arrow(q.change_pct)} {Math.abs(q.change_pct).toFixed(2)}%
+      {latest.quotes.map((q) => {
+        const spark = sparkline(closesByTicker[q.ticker]);
+        const dir = cls(q.change_pct);
+        return (
+          <div class={`card card-lift quote ${dir}-edge`}>
+            <div class="name">{q.name}</div>
+            <div class="close" data-countup={q.close} data-decimals={decimalsOf(q.close)}>{fmt(q.close)}</div>
+            <div class={`pill ${dir}`}>
+              {q.change_pct > 0 ? <TrendingUp size={13} /> : q.change_pct < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
+              {q.change_pct > 0 ? "+" : q.change_pct < 0 ? "-" : ""}{Math.abs(q.change_pct).toFixed(2)}%
+            </div>
+            {spark && (
+              <svg class={`spark ${dir}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+                <path d={spark.area} fill="currentColor" opacity="0.12" />
+                <path d={spark.line} fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   </section>
 )}
 
-<style>
-  .asof { color: var(--sub); font-size: 0.8rem; margin: 0 0 10px; }
-  .grid {
-    display: grid; gap: 10px;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+<script>
+  // 숫자 카운트업 애니메이션
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const els = document.querySelectorAll<HTMLElement>("[data-countup]");
+  for (const el of els) {
+    const value = parseFloat(el.dataset.countup ?? "");
+    if (!Number.isFinite(value) || reduce) continue;
+    const d = parseInt(el.dataset.decimals ?? "0", 10);
+    const format = (x: number) =>
+      x.toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+    const dur = 850;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / dur);
+      const eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = format(value * eased);
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
-  .quote { padding: 14px 16px; }
-  .name { color: var(--sub); font-size: 0.82rem; }
-  .close { font-size: 1.18rem; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
-  .chg { font-size: 0.85rem; font-weight: 600; }
+</script>
+
+<style>
+  .asof {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--sub);
+    font-size: 0.8rem;
+    margin: 0 0 10px;
+  }
+  .grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  }
+  .quote {
+    position: relative;
+    overflow: hidden;
+    padding: 14px 16px 12px;
+  }
+  .quote::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    opacity: 0.85;
+  }
+  .up-edge::before { background: var(--up); }
+  .down-edge::before { background: var(--down); }
+  .flat-edge::before { background: var(--sub); }
+  .name { color: var(--sub); font-size: 0.8rem; font-weight: 600; }
+  .close {
+    font-size: 1.22rem;
+    font-weight: 800;
+    margin: 2px 0 6px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .spark {
+    display: block;
+    width: 100%;
+    height: 34px;
+    margin-top: 10px;
+  }
 </style>

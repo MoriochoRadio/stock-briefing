@@ -1,0 +1,66 @@
+---
+// 렌더된 마크다운을 h2 기준으로 섹션 카드로 분리하고 목차 점프 링크를 만든다.
+// 정적 빌드 산출물에 동기 인라인 스크립트로 적용되어 첫 페인트 전에 재배치된다.
+---
+
+<nav id="briefing-toc" class="toc" hidden aria-label="브리핑 목차"></nav>
+<article id="briefing-body" class="prose rise"><slot /></article>
+
+<script is:inline>
+  (function () {
+    var root = document.getElementById("briefing-body");
+    var toc = document.getElementById("briefing-toc");
+    if (!root) return;
+
+    var kids = Array.prototype.slice.call(root.children);
+    var head = document.createElement("header");
+    head.className = "b-head";
+    var sections = [];
+    var current = null;
+
+    kids.forEach(function (node) {
+      if (node.tagName === "HR") {
+        node.remove(); // 카드 구분이 대신하므로 수평선 제거
+        return;
+      }
+      if (node.tagName === "H2") {
+        current = document.createElement("section");
+        current.className = "b-section";
+        current.appendChild(node);
+        sections.push({ el: current, h2: node });
+      } else if (current) {
+        current.appendChild(node);
+      } else {
+        head.appendChild(node);
+      }
+    });
+
+    if (sections.length === 0) return; // h2 없는 본문은 그대로 둔다
+
+    root.textContent = "";
+    if (head.childNodes.length) root.appendChild(head);
+    sections.forEach(function (s, i) {
+      if (!s.h2.id) s.h2.id = "sec-" + (i + 1);
+      root.appendChild(s.el);
+    });
+
+    // 표는 모바일 가로 스크롤 래퍼로 감싼다
+    Array.prototype.forEach.call(root.querySelectorAll("table"), function (table) {
+      var wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    });
+
+    // 목차 점프 링크
+    if (toc && sections.length > 1) {
+      sections.forEach(function (s) {
+        var a = document.createElement("a");
+        a.href = "#" + s.h2.id;
+        a.textContent = (s.h2.textContent || "").trim();
+        toc.appendChild(a);
+      });
+      toc.hidden = false;
+    }
+  })();
+</script>

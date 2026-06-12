@@ -1,6 +1,8 @@
 ---
 import { getCollection, render } from "astro:content";
 import Base from "../../layouts/Base.astro";
+import BriefingArticle from "../../components/BriefingArticle.astro";
+import { ArrowLeft } from "@lucide/astro";
 
 export async function getStaticPaths() {
   const all = await getCollection("briefings");
@@ -14,10 +16,24 @@ const base = raw.endsWith("/") ? raw : raw + "/";
 ---
 
 <Base title={`아침 시장 브리핑 — ${entry.id}`}>
-  <article class="card prose" style="padding: 10px 28px 28px;">
+  <BriefingArticle>
     <Content />
-  </article>
-  <p style="margin-top: 20px;">
-    <a href={base} style="color: var(--accent); text-decoration: none;">← 최신 브리핑으로</a>
+  </BriefingArticle>
+  <p class="back">
+    <a href={base}><ArrowLeft size={15} /> 최신 브리핑으로</a>
   </p>
 </Base>
+
+<style>
+  .back { margin-top: 20px; }
+  .back a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .back a:hover { text-decoration: underline; }
+</style>

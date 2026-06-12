@@ -1,95 +1,151 @@
 ---
+import "../styles/global.css";
+import { TrendingUp, Archive, Sun, Moon } from "@lucide/astro";
+
 const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
 const raw = import.meta.env.BASE_URL;
 const base = raw.endsWith("/") ? raw : raw + "/";
 ---
 
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <title>{title}</title>
     <link rel="icon" href={`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>`} />
+    <!-- 저장된 테마를 첫 페인트 전에 적용 (FOUC 방지) -->
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   </head>
   <body>
     <nav class="topbar">
-      <a href={base} class="brand">📈 아침 시장 브리핑</a>
-      <a href={`${base}archive/`} class="nav-link">아카이브</a>
+      <div class="topbar-inner">
+        <a href={base} class="brand">
+          <span class="brand-mark"><TrendingUp size={17} stroke-width={2.5} /></span>
+          아침 시장 브리핑
+        </a>
+        <div class="topbar-right">
+          <a href={`${base}archive/`} class="nav-link">
+            <Archive size={15} />
+            아카이브
+          </a>
+          <button id="theme-toggle" type="button" aria-label="다크/라이트 모드 전환" title="다크/라이트 모드 전환">
+            <Sun size={16} class="icon-sun" />
+            <Moon size={16} class="icon-moon" />
+          </button>
+        </div>
+      </div>
     </nav>
+
     <main class="container">
       <slot />
     </main>
+
     <footer class="footer">
       자동 생성 브리핑 · 투자 권유가 아닌 정보 제공입니다 ·
       <a href="https://github.com" rel="noopener">GitHub Actions로 매일 07:00 KST 갱신</a>
     </footer>
+
+    <script is:inline>
+      (function () {
+        var btn = document.getElementById("theme-toggle");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+          var el = document.documentElement;
+          var next = el.dataset.theme === "light" ? "dark" : "light";
+          el.dataset.theme = next;
+          try { localStorage.setItem("theme", next); } catch (e) {}
+          window.dispatchEvent(new CustomEvent("themechange", { detail: next }));
+        });
+      })();
+    </script>
   </body>
 </html>
 
-<style is:global>
-  :root {
-    --bg: #0b0e14;
-    --bg-soft: #11151f;
-    --card: #161b27;
-    --card-hover: #1c2230;
-    --border: #232b3b;
-    --text: #e6e9f0;
-    --sub: #8b93a7;
-    --accent: #5b9dff;
-    --up: #ff4d5e;       /* 한국식: 상승=빨강 */
-    --down: #4d7fff;     /* 하락=파랑 */
-    --radius: 14px;
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background:
-      radial-gradient(1200px 500px at 70% -10%, #15203a55, transparent),
-      var(--bg);
-    color: var(--text);
-    font-family: "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
-    line-height: 1.75;
-  }
+<style>
   .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    max-width: 880px; margin: 0 auto; padding: 18px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
-  .brand { font-weight: 800; font-size: 1.05rem; color: var(--text); text-decoration: none; }
-  .nav-link { color: var(--sub); text-decoration: none; font-size: 0.92rem; }
-  .nav-link:hover { color: var(--accent); }
-  .container { max-width: 880px; margin: 0 auto; padding: 8px 20px 80px; }
+  .topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 12px 20px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 800;
+    font-size: 1.02rem;
+    color: var(--text);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--up)));
+  }
+  .topbar-right { display: flex; align-items: center; gap: 6px; }
+  .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    color: var(--sub);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: color 0.15s, background-color 0.15s;
+  }
+  .nav-link:hover { color: var(--accent); background: var(--card-hover); }
+  #theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--sub);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+  }
+  #theme-toggle:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+
+  .container { max-width: 920px; margin: 0 auto; padding: 18px 20px 80px; }
   .footer {
-    max-width: 880px; margin: 0 auto; padding: 24px 20px 48px;
-    color: var(--sub); font-size: 0.8rem; border-top: 1px solid var(--border);
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 20px 48px;
+    color: var(--sub);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
   }
   .footer a { color: var(--sub); }
-
-  /* 브리핑 본문 타이포그래피 */
-  .prose h1 { font-size: 1.45rem; line-height: 1.4; }
-  .prose h2 {
-    font-size: 1.12rem; margin-top: 2.2em; padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-  }
-  .prose h3 { font-size: 1rem; color: var(--accent); }
-  .prose table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93rem; }
-  .prose th, .prose td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; }
-  .prose th { background: var(--card); }
-  .prose a { color: var(--accent); text-decoration: none; }
-  .prose a:hover { text-decoration: underline; }
-  .prose li { margin: 7px 0; }
-  .prose hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
-  .prose em { color: var(--sub); }
-  .prose blockquote { border-left: 3px solid var(--accent); margin: 0; padding: 2px 18px; color: var(--sub); }
-  .prose code { background: var(--card); padding: 2px 6px; border-radius: 6px; font-size: 0.88em; }
-
-  /* 공용 카드 */
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px 20px;
-  }
-  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--sub); }
 </style>
