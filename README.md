@@ -37,7 +37,7 @@ GitHub Actions (매일 07:00 KST)
 
 6. **테스트 실행** — Actions 탭 → "Daily Stock Briefing" → Run workflow.
    완료 후 `https://<아이디>.github.io/stock-briefing/` 접속 → 끝!
-
+   현재 레포의 경우 "https://moriochoradio.github.io/stock-briefing/"
 ## 커스터마이징
 
 | 바꾸고 싶은 것 | 위치 |
