@@ -1,6 +1,7 @@
 ---
 const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
-const base = import.meta.env.BASE_URL;
+const raw = import.meta.env.BASE_URL;
+const base = raw.endsWith("/") ? raw : raw + "/";
 ---
 
 <!DOCTYPE html>
