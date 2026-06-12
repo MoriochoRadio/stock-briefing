@@ -1,7 +1,14 @@
 # 📈 매일 아침 주식시장 브리핑 (완전 무료 자동화)
 
+[![Daily Stock Briefing](https://github.com/MoriochoRadio/stock-briefing/actions/workflows/daily.yml/badge.svg)](https://github.com/MoriochoRadio/stock-briefing/actions/workflows/daily.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 매일 한국시간 오전 7시, 미국·한국 증시 맞춤 브리핑을 자동 생성해 대시보드 웹사이트로 배포합니다.
-**서버·비용 0원**: GitHub Actions(실행) + Gemini 무료 티어(분석) + GitHub Pages(호스팅) + Astro(사이트).
+**서버·비용 0원**: GitHub Actions(실행) + Gemini 무료 티어(분석) + GitHub Pages(호스팅).
+
+🔗 **라이브 데모**: https://moriochoradio.github.io/stock-briefing/
+
+**기술 스택**: Python(yfinance, Google News RSS) · Gemini API · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
 
 ## 동작 구조
 
@@ -38,6 +45,7 @@ GitHub Actions (매일 07:00 KST)
 6. **테스트 실행** — Actions 탭 → "Daily Stock Briefing" → Run workflow.
    완료 후 `https://<아이디>.github.io/stock-briefing/` 접속 → 끝!
    현재 레포의 경우 "https://moriochoradio.github.io/stock-briefing/"
+
 ## 커스터마이징
 
 | 바꾸고 싶은 것 | 위치 |
@@ -54,4 +62,13 @@ GitHub Actions (매일 07:00 KST)
 - 시세 카드·차트는 워크플로가 1회 이상 실행돼 히스토리가 쌓이면 표시됩니다 (차트는 2일 이상).
 - 레포 이름을 `<아이디>.github.io`로 만들 경우 `daily.yml`의 `BASE_PATH`를 `"/"`로 수정.
 - cron은 GitHub 부하에 따라 5~30분 지연될 수 있습니다.
-- 본 브리핑은 투자 권유가 아닌 정보 제공입니다.
+- 본 브리핑은 투자 권유가 아닌 정보 제공입니다. 데이터 출처: Yahoo Finance(yfinance), Google News.
+
+## 개발 (Claude Code)
+
+이 레포는 [Claude Code](https://claude.com/claude-code)로 개발·유지보수합니다. 작업 규칙은 `CLAUDE.md` 참고.
+핵심: **push 전 항상 `git pull --rebase`** (Actions 봇이 매일 커밋하므로).
+
+## 라이선스
+
+[MIT](LICENSE)
