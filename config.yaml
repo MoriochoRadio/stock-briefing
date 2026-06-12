@@ -1,0 +1,43 @@
+# ===== 일일 주식 브리핑 설정 =====
+# 이 파일만 수정하면 종목/포맷이 바뀝니다.
+
+profile:
+  style: "보유 종목 없는 공부/관망 단계. 대형주·IT/AI 섹터 중심. 용어 해설 필요."
+
+indices:
+  - { ticker: "^DJI",    name: "다우" }
+  - { ticker: "^GSPC",   name: "S&P 500" }
+  - { ticker: "^IXIC",   name: "나스닥" }
+  - { ticker: "^KS11",   name: "코스피" }
+  - { ticker: "KRW=X",   name: "원/달러" }
+
+watchlist_us:
+  - { ticker: "NVDA", name: "엔비디아" }
+  - { ticker: "ORCL", name: "오라클" }
+  - { ticker: "TSLA", name: "테슬라" }
+
+watchlist_kr:
+  - { ticker: "005930.KS", name: "삼성전자" }
+  - { ticker: "000660.KS", name: "SK하이닉스" }
+
+# 뉴스 검색 키워드 (Google News RSS)
+news_queries:
+  - { q: "미국 증시 마감",            lang: "ko" }
+  - { q: "코스피 삼성전자 SK하이닉스", lang: "ko" }
+  - { q: "Nvidia stock",             lang: "en" }
+  - { q: "Oracle stock",             lang: "en" }
+  - { q: "Tesla stock",              lang: "en" }
+  - { q: "OpenAI OR Anthropic OR xAI funding IPO", lang: "en" }
+  - { q: "원달러 환율",               lang: "ko" }
+
+news_per_query: 5   # 쿼리당 헤드라인 수
+
+llm:
+  # provider 우선순위: 환경변수에 GEMINI_API_KEY 있으면 gemini, ANTHROPIC_API_KEY 있으면 anthropic
+  gemini_model: "gemini-2.5-flash"
+  anthropic_model: "claude-sonnet-4-6"
+  max_output_tokens: 4096
+
+site:
+  title: "📈 아침 시장 브리핑"
+  description: "미국·한국 증시 일일 맞춤 브리핑"

@@ -1,0 +1,73 @@
+---
+import history from "../data/history.json";
+
+// 코스피·나스닥·S&P500을 첫날=100으로 정규화한 추이 (2일 이상 누적 시 표시)
+const TARGETS = ["^KS11", "^IXIC", "^GSPC"];
+const COLORS = { "^KS11": "#ff4d5e", "^IXIC": "#5b9dff", "^GSPC": "#9aa7ff" };
+
+const series = {};
+const labels = [];
+for (const snap of history) {
+  labels.push(snap.date.slice(5)); // MM-DD
+  for (const t of TARGETS) {
+    const q = snap.quotes.find((x) => x.ticker === t);
+    if (!series[t]) series[t] = { name: q?.name ?? t, points: [] };
+    series[t].points.push(q ? q.close : null);
+  }
+}
+const datasets = TARGETS.filter((t) => series[t]?.points.some((p) => p != null)).map((t) => {
+  const first = series[t].points.find((p) => p != null);
+  return {
+    label: series[t].name,
+    data: series[t].points.map((p) => (p == null ? null : +((p / first) * 100).toFixed(2))),
+    borderColor: COLORS[t],
+    backgroundColor: COLORS[t],
+    tension: 0.3,
+    pointRadius: 2,
+    borderWidth: 2,
+    spanGaps: true,
+  };
+});
+const show = history.length >= 2 && datasets.length > 0;
+const payload = JSON.stringify({ labels, datasets });
+---
+
+{show && (
+  <section class="card chart-card">
+    <h2 class="chart-title">지수 추이 <span class="hint">(시작일=100 기준)</span></h2>
+    <div class="chart-wrap"><canvas id="market-chart"></canvas></div>
+    <script type="application/json" id="chart-data" set:html={payload} />
+    <script is:inline src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    <script is:inline>
+      (() => {
+        const el = document.getElementById("chart-data");
+        const cv = document.getElementById("market-chart");
+        if (!el || !cv || typeof Chart === "undefined") return;
+        const { labels, datasets } = JSON.parse(el.textContent);
+        new Chart(cv, {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { labels: { color: "#8b93a7", boxWidth: 12 } },
+            },
+            scales: {
+              x: { ticks: { color: "#8b93a7" }, grid: { color: "#232b3b" } },
+              y: { ticks: { color: "#8b93a7" }, grid: { color: "#232b3b" } },
+            },
+          },
+        });
+      })();
+    </script>
+  </section>
+)}
+
+<style>
+  .chart-card { margin-top: 14px; }
+  .chart-title { font-size: 0.95rem; margin: 0 0 10px; }
+  .hint { color: var(--sub); font-weight: 400; font-size: 0.8rem; }
+  .chart-wrap { position: relative; height: 260px; }
+</style>

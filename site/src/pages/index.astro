@@ -1,0 +1,56 @@
+---
+import { getCollection, render } from "astro:content";
+import Base from "../layouts/Base.astro";
+import QuoteCards from "../components/QuoteCards.astro";
+import MarketChart from "../components/MarketChart.astro";
+
+const base = import.meta.env.BASE_URL;
+const all = (await getCollection("briefings")).sort((a, b) => b.id.localeCompare(a.id));
+const latest = all[0];
+const recent = all.slice(1, 6);
+
+let Content = null;
+if (latest) ({ Content } = await render(latest));
+---
+
+<Base>
+  <QuoteCards />
+  <MarketChart />
+
+  {latest ? (
+    <article class="card briefing prose">
+      <Content />
+    </article>
+  ) : (
+    <p>아직 브리핑이 없습니다. 첫 워크플로 실행 후 생성됩니다.</p>
+  )}
+
+  {recent.length > 0 && (
+    <section class="recent">
+      <h2>지난 브리핑</h2>
+      <div class="list">
+        {recent.map((b) => (
+          <a class="card item" href={`${base}briefings/${b.id}/`}>
+            <strong>{b.id}</strong>
+            <span class="go">→</span>
+          </a>
+        ))}
+      </div>
+      <a class="more" href={`${base}archive/`}>전체 아카이브 보기</a>
+    </section>
+  )}
+</Base>
+
+<style>
+  .briefing { margin-top: 14px; padding: 10px 28px 28px; }
+  .recent h2 { font-size: 1rem; margin: 32px 0 12px; color: var(--sub); }
+  .list { display: grid; gap: 8px; }
+  .item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 13px 18px; text-decoration: none; color: var(--text);
+    transition: background 0.15s;
+  }
+  .item:hover { background: var(--card-hover); }
+  .go { color: var(--accent); }
+  .more { display: inline-block; margin-top: 14px; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+</style>

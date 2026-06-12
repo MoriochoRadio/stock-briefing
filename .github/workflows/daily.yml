@@ -1,0 +1,66 @@
+name: Daily Stock Briefing
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 22:00 UTC = 한국시간 오전 7시
+  workflow_dispatch:        # 수동 실행 버튼
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Fetch market data
+        run: python scripts/fetch_data.py
+
+      - name: Generate briefing
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/generate.py
+
+      - name: Commit briefing & history
+        run: |
+          git config user.name "briefing-bot"
+          git config user.email "actions@github.com"
+          git add briefings site/src/data/history.json
+          git diff --cached --quiet || git commit -m "briefing: $(date -u -d '+9 hours' +'%Y-%m-%d')"
+          git push
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build Astro site
+        env:
+          BASE_PATH: "/${{ github.event.repository.name }}"
+          SITE_URL: "https://${{ github.repository_owner }}.github.io"
+        run: |
+          cd site
+          npm install
+          npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

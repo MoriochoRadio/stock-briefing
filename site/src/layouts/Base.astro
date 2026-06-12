@@ -1,0 +1,94 @@
+---
+const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="icon" href={`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>`} />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  </head>
+  <body>
+    <nav class="topbar">
+      <a href={base} class="brand">📈 아침 시장 브리핑</a>
+      <a href={`${base}archive/`} class="nav-link">아카이브</a>
+    </nav>
+    <main class="container">
+      <slot />
+    </main>
+    <footer class="footer">
+      자동 생성 브리핑 · 투자 권유가 아닌 정보 제공입니다 ·
+      <a href="https://github.com" rel="noopener">GitHub Actions로 매일 07:00 KST 갱신</a>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --bg: #0b0e14;
+    --bg-soft: #11151f;
+    --card: #161b27;
+    --card-hover: #1c2230;
+    --border: #232b3b;
+    --text: #e6e9f0;
+    --sub: #8b93a7;
+    --accent: #5b9dff;
+    --up: #ff4d5e;       /* 한국식: 상승=빨강 */
+    --down: #4d7fff;     /* 하락=파랑 */
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 500px at 70% -10%, #15203a55, transparent),
+      var(--bg);
+    color: var(--text);
+    font-family: "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
+    line-height: 1.75;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 880px; margin: 0 auto; padding: 18px 20px;
+  }
+  .brand { font-weight: 800; font-size: 1.05rem; color: var(--text); text-decoration: none; }
+  .nav-link { color: var(--sub); text-decoration: none; font-size: 0.92rem; }
+  .nav-link:hover { color: var(--accent); }
+  .container { max-width: 880px; margin: 0 auto; padding: 8px 20px 80px; }
+  .footer {
+    max-width: 880px; margin: 0 auto; padding: 24px 20px 48px;
+    color: var(--sub); font-size: 0.8rem; border-top: 1px solid var(--border);
+  }
+  .footer a { color: var(--sub); }
+
+  /* 브리핑 본문 타이포그래피 */
+  .prose h1 { font-size: 1.45rem; line-height: 1.4; }
+  .prose h2 {
+    font-size: 1.12rem; margin-top: 2.2em; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .prose h3 { font-size: 1rem; color: var(--accent); }
+  .prose table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93rem; }
+  .prose th, .prose td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; }
+  .prose th { background: var(--card); }
+  .prose a { color: var(--accent); text-decoration: none; }
+  .prose a:hover { text-decoration: underline; }
+  .prose li { margin: 7px 0; }
+  .prose hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+  .prose em { color: var(--sub); }
+  .prose blockquote { border-left: 3px solid var(--accent); margin: 0; padding: 2px 18px; color: var(--sub); }
+  .prose code { background: var(--card); padding: 2px 6px; border-radius: 6px; font-size: 0.88em; }
+
+  /* 공용 카드 */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--sub); }
+</style>

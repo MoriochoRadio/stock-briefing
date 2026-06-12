@@ -1,0 +1,40 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+const base = import.meta.env.BASE_URL;
+const all = (await getCollection("briefings")).sort((a, b) => b.id.localeCompare(a.id));
+
+// 월별 그룹핑
+const byMonth = {};
+for (const b of all) {
+  const month = b.id.slice(0, 7); // YYYY-MM
+  (byMonth[month] ??= []).push(b);
+}
+const months = Object.keys(byMonth).sort().reverse();
+---
+
+<Base title="아카이브 — 아침 시장 브리핑">
+  <h1 style="font-size: 1.3rem;">📂 브리핑 아카이브</h1>
+  {months.length === 0 && <p>아직 브리핑이 없습니다.</p>}
+  {months.map((m) => (
+    <section>
+      <h2 class="month">{m}</h2>
+      <div class="grid">
+        {byMonth[m].map((b) => (
+          <a class="card day" href={`${base}briefings/${b.id}/`}>{b.id.slice(8)}일</a>
+        ))}
+      </div>
+    </section>
+  ))}
+</Base>
+
+<style>
+  .month { font-size: 0.95rem; color: var(--sub); margin: 28px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+  .day {
+    text-align: center; padding: 12px 6px; text-decoration: none; color: var(--text);
+    font-variant-numeric: tabular-nums; transition: background 0.15s;
+  }
+  .day:hover { background: var(--card-hover); color: var(--accent); }
+</style>

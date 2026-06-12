@@ -1,0 +1,6 @@
+data.json
+__pycache__/
+*.pyc
+site/node_modules/
+site/dist/
+site/.astro/
