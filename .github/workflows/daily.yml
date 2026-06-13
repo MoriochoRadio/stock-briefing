@@ -18,9 +18,9 @@ jobs:
   briefing:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -42,9 +42,11 @@ jobs:
           git config user.email "actions@github.com"
           git add briefings site/src/data/history.json
           git diff --cached --quiet || git commit -m "briefing: $(date -u -d '+9 hours' +'%Y-%m-%d')"
+          # 원격에 다른 커밋이 있을 수 있으니 rebase 후 push (push 거부 방지)
+          git pull --rebase origin main
           git push
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
 

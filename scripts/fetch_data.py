@@ -1,5 +1,6 @@
 """시장 데이터 + 뉴스 헤드라인 수집 → data.json (LLM 불필요, 전부 무료 소스)"""
 import json
+import math
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -20,18 +21,23 @@ def load_config():
 
 
 def fetch_quotes(items):
-    """최근 종가와 등락률. 실패한 티커는 건너뜀."""
+    """최근 종가와 등락률. 실패하거나 값이 비정상(NaN)인 티커는 건너뜀."""
     out = []
     for item in items:
         try:
             hist = yf.Ticker(item["ticker"]).history(period="5d")
             if len(hist) < 2:
                 continue
-            last, prev = hist["Close"].iloc[-1], hist["Close"].iloc[-2]
+            last, prev = float(hist["Close"].iloc[-1]), float(hist["Close"].iloc[-2])
+            # 휴장/빈 응답 시 yfinance가 마지막 종가를 NaN으로 주는 경우가 있다.
+            # NaN을 그대로 두면 history.json이 비표준 JSON이 되어 Astro 빌드가 깨지므로 건너뛴다.
+            if not (math.isfinite(last) and math.isfinite(prev)) or prev == 0:
+                print(f"[warn] {item['ticker']}: 종가 비정상(NaN/0) — 건너뜀")
+                continue
             out.append({
                 "name": item["name"],
                 "ticker": item["ticker"],
-                "close": round(float(last), 2),
+                "close": round(last, 2),
                 "change_pct": round((last / prev - 1) * 100, 2),
                 "date": str(hist.index[-1].date()),
             })
@@ -74,6 +80,16 @@ def fetch_news(queries, per_query):
     return out
 
 
+def _clean_snapshot(snap):
+    """스냅샷에서 NaN/Infinity 종가를 가진 quote를 제거 (비표준 JSON 방지)."""
+    clean = [
+        q for q in snap.get("quotes", [])
+        if isinstance(q.get("close"), (int, float)) and math.isfinite(q["close"])
+        and isinstance(q.get("change_pct"), (int, float)) and math.isfinite(q["change_pct"])
+    ]
+    return {**snap, "quotes": clean}
+
+
 def update_history(data, keep_days=120):
     """site/src/data/history.json에 일별 스냅샷 누적 (대시보드 카드·차트용)"""
     path = ROOT / "site" / "src" / "data" / "history.json"
@@ -83,12 +99,15 @@ def update_history(data, keep_days=120):
             history = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             history = []
+    # 과거에 잘못 기록된 NaN 항목까지 함께 정리해 자가 치유한다.
+    history = [_clean_snapshot(h) for h in history]
     quotes = data["indices"] + data["watchlist_us"] + data["watchlist_kr"]
-    snap = {"date": data["date_kst"], "quotes": quotes}
+    snap = _clean_snapshot({"date": data["date_kst"], "quotes": quotes})
     history = [h for h in history if h["date"] != snap["date"]] + [snap]
     history = history[-keep_days:]
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
+    # allow_nan=False: 혹시라도 NaN이 남으면 조용히 깨진 JSON을 쓰는 대신 즉시 실패시킨다.
+    path.write_text(json.dumps(history, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     print(f"history: {len(history)} day(s)")
 
 
