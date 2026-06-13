@@ -450,7 +450,7 @@ html.js [data-reveal].is-visible { opacity: 1; transform: none; }
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
   transition: left 1s cubic-bezier(0.2, 0.7, 0.3, 1) 0.15s;
 }
-.mood.is-visible .fng-marker,
+[data-reveal].is-visible .fng-marker,
 html:not(.js) .fng-marker { left: var(--p); }
 .fng-scale { display: flex; justify-content: space-between; margin-top: 5px; color: var(--sub); font-size: 0.7rem; }
 @media (prefers-reduced-motion: reduce) { .fng-marker { transition: none; } }
@@ -475,8 +475,9 @@ html:not(.js) .fng-marker { left: var(--p); }
 .mood-bar .seg { width: 0; transition: width 1s cubic-bezier(0.2, 0.7, 0.3, 1) 0.15s; }
 .mood-bar .seg.up { background: linear-gradient(90deg, color-mix(in srgb, var(--up) 65%, transparent), var(--up)); }
 .mood-bar .seg.down { background: linear-gradient(90deg, var(--down), color-mix(in srgb, var(--down) 65%, transparent)); }
-.mood.is-visible .seg,
-html:not(.js) .mood .seg { width: var(--w); }
+[data-reveal].is-visible .seg,
+html:not(.js) .seg { width: var(--w); }
+.mood-sectors.bare { margin-top: 0; padding-top: 0; border-top: none; }
 .mc-meta { color: var(--sub); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
 .mc-meta .up { color: var(--up); }
 .mc-meta .down { color: var(--down); }

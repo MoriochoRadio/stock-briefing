@@ -1,0 +1,280 @@
+---
+import Base from "../../layouts/Base.astro";
+import SectorHeatmap from "../../components/SectorHeatmap.astro";
+import MarketChart from "../../components/MarketChart.astro";
+import history from "../../data/history.json";
+import series from "../../data/series.json";
+import sentiment from "../../data/sentiment.json";
+import { tvSymbol } from "../../lib/tv";
+import { kindOf } from "../../lib/groups";
+import { summarize, avgText, toneOf, sparkPath, range52, fmtNum } from "../../lib/market";
+import { Gauge, Activity, TrendingUp, TrendingDown, Minus, ArrowLeft, LineChart } from "@lucide/astro";
+
+const raw = import.meta.env.BASE_URL;
+const base = raw.endsWith("/") ? raw : raw + "/";
+
+const latest = history.length ? history[history.length - 1] : null;
+const quotes = latest ? latest.quotes : [];
+const allSeries = series as Record<string, [string, number][]>;
+const us = (sentiment.us ?? []).filter((q) => Number.isFinite(q.change_pct));
+const kr = (sentiment.kr ?? []).filter((q) => Number.isFinite(q.change_pct));
+const fng = sentiment.fng ?? null;
+const fngTone = fng ? (fng.rating.includes("greed") ? "up" : fng.rating.includes("fear") ? "down" : "flat") : "flat";
+
+const watch = quotes.filter((q) => kindOf(q.ticker) === "stock" && Number.isFinite(q.change_pct));
+const total = summarize([...us, ...kr]);
+const groups = [
+  { name: "내 관심종목", s: summarize(watch) },
+  { name: "한국시장", s: summarize(kr) },
+  { name: "미국시장", s: summarize(us) },
+  { name: "총합", s: summarize([...us, ...kr]) },
+].filter((g) => g.s.count > 0);
+
+const indices = ["^DJI", "^GSPC", "^IXIC", "^KS11"]
+  .map((t) => {
+    const q = quotes.find((x) => x.ticker === t);
+    if (!q) return null;
+    const spark = sparkPath((allSeries[t] ?? []).slice(-30).map((p) => p[1]), 120, 30);
+    return { ticker: t, name: q.name, close: q.close, change: q.change_pct, tone: toneOf(q.change_pct), spark, tv: tvSymbol(t) };
+  })
+  .filter(Boolean);
+
+const watchCards = watch.map((q) => ({
+  ticker: q.ticker,
+  name: q.name,
+  close: q.close,
+  change: q.change_pct,
+  tone: toneOf(q.change_pct),
+  tv: tvSymbol(q.ticker),
+  r: range52(allSeries[q.ticker]),
+}));
+
+const ToneIcon = (t) => (t === "up" ? TrendingUp : t === "down" ? TrendingDown : Minus);
+const asOf = sentiment.asOf ?? latest?.date ?? "";
+const tvAttr = (item) =>
+  item.tv ? { "data-tv": item.tv, "data-name": item.name, role: "button", tabindex: "0", title: `${item.name} 실시간 차트` } : {};
+---
+
+<Base title="마켓 대시보드 — 아침 시장 브리핑">
+  <header class="hero">
+    <p class="hero-eyebrow">대시보드</p>
+    <h1 class="hero-date">마켓 대시보드</h1>
+    <p class="hero-sum">
+      {asOf} 기준 · 시장 전반을 한 화면에.
+      <a class="dash-back" href={base}><ArrowLeft size={14} /> 브리핑으로</a>
+    </p>
+  </header>
+
+  <div class="bento">
+    {fng && (
+      <section class="card bento-tile t-fng" data-reveal data-glow>
+        <span class="tile-cap"><Gauge size={14} /> 공포·탐욕 <span class="muted">미국 · CNN</span></span>
+        <div class={`fng-big ${fngTone}`}>{fng.score}<em>{fng.label}</em></div>
+        <div class="fng-track"><span class="fng-marker" style={`--p:${fng.score}%`}></span></div>
+        <div class="fng-scale"><span>공포</span><span>탐욕</span></div>
+      </section>
+    )}
+
+    <section class="card bento-tile t-total" data-reveal data-glow>
+      <span class="tile-cap"><Activity size={14} /> 시장 총합</span>
+      {(() => { const Icon = ToneIcon(total.tone); return (
+        <div class={`total-label ${total.tone}`}><Icon size={20} /> {total.label}</div>
+      ); })()}
+      <div class="mood-bar">
+        <span class="seg up" style={`--w:${total.upPct}%`}></span>
+        <span class="seg down" style={`--w:${total.downPct}%`}></span>
+      </div>
+      <div class="tile-meta"><span class="up">{total.ups}↑</span> <span class="down">{total.downs}↓</span> · 평균 {avgText(total.avg)}</div>
+    </section>
+
+    <section class="card bento-tile t-idx" data-reveal>
+      <span class="tile-cap">지수 스냅샷</span>
+      <div class="idx-list">
+        {indices.map((ix) => (
+          <div class={`idx-row${ix.tv ? " clickable" : ""}`} {...tvAttr(ix)}>
+            <span class="idx-name">{ix.name}</span>
+            {ix.spark && (
+              <svg class={`idx-spark ${ix.tone}`} viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true">
+                <path d={ix.spark.area} fill="currentColor" opacity="0.12" />
+                <path d={ix.spark.line} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            )}
+            <span class="idx-close">{fmtNum(ix.close)}</span>
+            <span class={`idx-chg ${ix.tone}`}>{avgText(ix.change)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="card bento-tile t-watch" data-reveal>
+      <span class="tile-cap">관심종목 <span class="muted">클릭 → 실시간 차트</span></span>
+      <div class="w-list">
+        {watchCards.map((w) => (
+          <div class={`w-row${w.tv ? " clickable" : ""}`} {...tvAttr(w)}>
+            <span class="w-name">{w.name}{w.tv && <LineChart size={12} class="w-hint" />}</span>
+            {w.r ? (
+              <span class="w-range" title={`52주 ${fmtNum(w.r.lo)} ~ ${fmtNum(w.r.hi)}`}><i class={`w-dot ${w.tone}`} style={`left:${w.r.pos.toFixed(1)}%`}></i></span>
+            ) : (
+              <span class="w-range empty"></span>
+            )}
+            <span class="w-close">{fmtNum(w.close)}</span>
+            <span class={`w-chg ${w.tone}`}>{avgText(w.change)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="card bento-tile t-groups" data-reveal>
+      <span class="tile-cap">분위기 — 그룹별</span>
+      <div class="g4">
+        {groups.map((g) => {
+          const Icon = ToneIcon(g.s.tone);
+          return (
+            <div class="g4-cell">
+              <div class="g4-top">
+                <span class="g4-name">{g.name}</span>
+                <span class={`g4-label ${g.s.tone}`}><Icon size={13} /> {g.s.label}</span>
+              </div>
+              <div class="mood-bar">
+                <span class="seg up" style={`--w:${g.s.upPct}%`}></span>
+                <span class="seg down" style={`--w:${g.s.downPct}%`}></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+
+    <section class="card bento-tile t-heat" data-reveal>
+      <div class="tile-head">
+        <span class="tile-cap">분야별 히트맵</span>
+        <span class="ms-legend">약세 <i class="lg-bar"></i> 강세</span>
+      </div>
+      <SectorHeatmap us={us} kr={kr} bare />
+    </section>
+  </div>
+
+  <div class="eyebrow"><span class="tag">TREND</span> 지수 추이 <span class="line"></span></div>
+  <MarketChart />
+</Base>
+
+<style>
+  .dash-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.86rem;
+  }
+  .dash-back:hover { text-decoration: underline; }
+
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .bento-tile { padding: 16px 18px; display: flex; flex-direction: column; }
+  .t-fng { grid-column: span 2; }
+  .t-total { grid-column: span 2; }
+  .t-idx { grid-column: span 2; }
+  .t-watch { grid-column: span 3; }
+  .t-groups { grid-column: span 3; }
+  .t-heat { grid-column: span 6; }
+  @media (max-width: 820px) {
+    .bento { grid-template-columns: repeat(2, 1fr); }
+    .t-fng, .t-total, .t-idx, .t-watch, .t-groups { grid-column: span 1; }
+    .t-heat { grid-column: span 2; }
+  }
+  @media (max-width: 520px) {
+    .bento { grid-template-columns: 1fr; }
+    .bento > * { grid-column: span 1 !important; }
+  }
+
+  .tile-cap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  .tile-cap .muted { color: var(--sub); font-weight: 600; font-size: 0.72rem; }
+  .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .tile-head .tile-cap { margin-bottom: 0; }
+
+  /* F&G */
+  .fng-big { display: flex; align-items: baseline; gap: 8px; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin: 2px 0 12px; }
+  .fng-big em { font-size: 0.92rem; font-weight: 700; font-style: normal; }
+  .t-fng .fng-track { margin-top: auto; }
+
+  /* 총합 */
+  .total-label { display: inline-flex; align-items: center; gap: 7px; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 12px; }
+  .tile-meta { color: var(--sub); font-size: 0.78rem; font-variant-numeric: tabular-nums; margin-top: 9px; }
+  .tile-meta .up { color: var(--up); }
+  .tile-meta .down { color: var(--down); }
+
+  /* 지수 스냅샷 */
+  .idx-list { display: flex; flex-direction: column; gap: 2px; }
+  .idx-row {
+    display: grid;
+    grid-template-columns: 4.2em 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 9px;
+    transition: background-color 0.15s ease;
+  }
+  .idx-row.clickable { cursor: pointer; }
+  .idx-row.clickable:hover { background: var(--card-hover); }
+  .idx-row.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .idx-name { font-size: 0.84rem; font-weight: 700; }
+  .idx-spark { width: 100%; height: 24px; }
+  .idx-spark.up { color: var(--up); }
+  .idx-spark.down { color: var(--down); }
+  .idx-spark.flat { color: var(--sub); }
+  .idx-close { font-size: 0.84rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .idx-chg { font-size: 0.8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .idx-chg.up { color: var(--up); }
+  .idx-chg.down { color: var(--down); }
+  .idx-chg.flat { color: var(--sub); }
+
+  /* 관심종목 */
+  .w-list { display: flex; flex-direction: column; gap: 2px; }
+  .w-row {
+    display: grid;
+    grid-template-columns: 5.6em 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 9px;
+    transition: background-color 0.15s ease;
+  }
+  .w-row.clickable { cursor: pointer; }
+  .w-row.clickable:hover { background: var(--card-hover); }
+  .w-row.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .w-name { display: inline-flex; align-items: center; gap: 4px; font-size: 0.84rem; font-weight: 700; }
+  .w-hint { color: var(--sub); }
+  .w-range { position: relative; height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--down), color-mix(in srgb, var(--sub) 40%, transparent), var(--up)); opacity: 0.85; }
+  .w-range.empty { opacity: 0; }
+  .w-dot { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: var(--text); border: 2px solid var(--card); transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .w-close { font-size: 0.84rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .w-chg { font-size: 0.8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .w-chg.up { color: var(--up); }
+  .w-chg.down { color: var(--down); }
+  .w-chg.flat { color: var(--sub); }
+
+  /* 그룹 분위기 */
+  .g4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px 16px; }
+  .g4-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+  .g4-name { font-size: 0.8rem; font-weight: 700; color: var(--sub); }
+  .g4-label { display: inline-flex; align-items: center; gap: 3px; font-size: 0.8rem; font-weight: 800; }
+  .g4-label.up { color: var(--up); }
+  .g4-label.down { color: var(--down); }
+  .g4-label.flat { color: var(--sub); }
+</style>

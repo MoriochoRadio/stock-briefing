@@ -1,6 +1,7 @@
 ---
 import history from "../data/history.json";
 import sentiment from "../data/sentiment.json";
+import SectorHeatmap from "./SectorHeatmap.astro";
 import { kindOf } from "../lib/groups";
 import { Activity, TrendingUp, TrendingDown, Minus, Gauge } from "@lucide/astro";
 
@@ -40,21 +41,6 @@ const groups = [
 ]
   .map((g) => ({ name: g.name, s: summarize(g.items) }))
   .filter((g) => g.s.count > 0);
-
-const toSectors = (arr) =>
-  [...arr]
-    .map((q) => ({ name: q.name, avg: q.change_pct, tone: q.change_pct > 0 ? "up" : q.change_pct < 0 ? "down" : "flat" }))
-    .sort((a, b) => b.avg - a.avg);
-const usSectors = toSectors(us);
-const krSectors = toSectors(kr);
-
-// 히트맵 타일 색: 등락 강도(|%|, 4%에서 최대)로 채도, 한국식 빨강=상승
-function heat(cp) {
-  const toneVar = cp > 0 ? "var(--up)" : cp < 0 ? "var(--down)" : "var(--sub)";
-  const pct = Math.round(Math.min(1, Math.abs(cp) / 4) * 70) + 14; // 14~84%
-  const text = pct >= 46 ? "#fff" : "var(--text)";
-  return `background:color-mix(in srgb, ${toneVar} ${pct}%, var(--card)); color:${text};`;
-}
 
 // 공포·탐욕 게이지: 점수(0~100) → 색/라벨 톤
 const fngTone = fng ? (fng.rating.includes("greed") ? "up" : fng.rating.includes("fear") ? "down" : "flat") : "flat";
@@ -102,28 +88,6 @@ const show = groups.length > 0 || fng;
       </div>
     )}
 
-    {(usSectors.length > 0 || krSectors.length > 0) && (
-      <div class="mood-sectors">
-        <div class="ms-head">
-          <span class="ms-cap">분야별 히트맵</span>
-          <span class="ms-legend">약세 <i class="lg-bar"></i> 강세</span>
-        </div>
-        {[{ flag: "🇺🇸", label: "미국", list: usSectors }, { flag: "🇰🇷", label: "한국", list: krSectors }]
-          .filter((row) => row.list.length > 0)
-          .map((row) => (
-            <div class="heat-group">
-              <span class="heat-flag">{row.flag} {row.label}</span>
-              <div class="heatmap">
-                {row.list.map((s) => (
-                  <span class="heat-tile" style={heat(s.avg)} title={`${s.name} ${avgText(s.avg)}`}>
-                    <b class="ht-name">{s.name}</b>
-                    <b class="ht-val">{avgText(s.avg)}</b>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-      </div>
-    )}
+    <SectorHeatmap us={us} kr={kr} />
   </section>
 )}
