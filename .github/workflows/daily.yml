@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "0 22 * * *"   # 22:00 UTC = 한국시간 오전 7시
   workflow_dispatch:        # 수동 실행 버튼
+  push:                     # main에 코드 push 시 사이트 재배포 (데이터 수집은 건너뜀)
+    branches: [main]
 
 permissions:
   contents: write
@@ -21,22 +23,27 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
+        if: github.event_name != 'push'
         with:
           python-version: "3.12"
 
       - name: Install Python deps
+        if: github.event_name != 'push'
         run: pip install -r requirements.txt
 
       - name: Fetch market data
+        if: github.event_name != 'push'
         run: python scripts/fetch_data.py
 
       - name: Generate briefing
+        if: github.event_name != 'push'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/generate.py
 
       - name: Commit briefing & history
+        if: github.event_name != 'push'
         run: |
           git config user.name "briefing-bot"
           git config user.email "actions@github.com"
