@@ -38,9 +38,14 @@
     if (sections.length === 0) return; // h2 없는 본문은 그대로 둔다
 
     root.textContent = "";
-    if (head.childNodes.length) root.appendChild(head);
+    if (head.childNodes.length) {
+      head.setAttribute("data-reveal", "");
+      root.appendChild(head);
+    }
     sections.forEach(function (s, i) {
       if (!s.h2.id) s.h2.id = "sec-" + (i + 1);
+      s.el.setAttribute("data-reveal", "");
+      s.el.style.setProperty("--i", String(i));
       root.appendChild(s.el);
     });
 
@@ -61,6 +66,41 @@
         toc.appendChild(a);
       });
       toc.hidden = false;
+    }
+
+    // 읽기 진행바 — 본문을 지나는 스크롤 비율을 상단 바로 표시
+    var bar = document.createElement("div");
+    bar.className = "read-progress";
+    document.body.appendChild(bar);
+    var updateProgress = function () {
+      var top = root.getBoundingClientRect().top + window.scrollY;
+      var span = root.offsetHeight - window.innerHeight;
+      var p = span > 0 ? (window.scrollY - top) / span : 0;
+      bar.style.width = Math.max(0, Math.min(1, p)) * 100 + "%";
+    };
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("resize", updateProgress, { passive: true });
+    updateProgress();
+
+    // 스크롤스파이 — 현재 보이는 섹션의 목차 링크를 강조
+    if (toc && sections.length > 1 && "IntersectionObserver" in window) {
+      var links = toc.querySelectorAll("a");
+      var spy = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          var id = en.target.querySelector("h2").id;
+          links.forEach(function (a) {
+            var on = a.getAttribute("href") === "#" + id;
+            a.classList.toggle("active", on);
+            if (on) {
+              // 활성 링크를 목차(가로 스크롤) 중앙으로만 이동 — 페이지 세로 스크롤은 건드리지 않음
+              var target = a.offsetLeft - toc.clientWidth / 2 + a.clientWidth / 2;
+              toc.scrollTo({ left: target, behavior: "smooth" });
+            }
+          });
+        });
+      }, { rootMargin: "-22% 0px -68% 0px" });
+      sections.forEach(function (s) { spy.observe(s.el); });
     }
   })();
 </script>

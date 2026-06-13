@@ -20,11 +20,11 @@ const months = Object.keys(byMonth).sort().reverse();
   <h1 class="page-title"><CalendarDays size={20} /> 브리핑 아카이브</h1>
   {months.length === 0 && <p>아직 브리핑이 없습니다.</p>}
   {months.map((m) => (
-    <section class="rise">
+    <section>
       <h2 class="month">{m}</h2>
       <div class="grid">
-        {byMonth[m].map((b) => (
-          <a class="card card-lift day" href={`${base}briefings/${b.id}/`}>{b.id.slice(8)}일</a>
+        {byMonth[m].map((b, i) => (
+          <a class="card card-lift day" data-reveal data-glow style={`--i:${i}`} href={`${base}briefings/${b.id}/`}>{b.id.slice(8)}일</a>
         ))}
       </div>
     </section>

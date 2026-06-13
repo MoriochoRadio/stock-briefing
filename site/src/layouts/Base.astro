@@ -15,9 +15,11 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     <meta name="description" content={description} />
     <title>{title}</title>
     <link rel="icon" href={`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>`} />
-    <!-- 저장된 테마를 첫 페인트 전에 적용 (FOUC 방지) -->
+    <!-- 저장된 테마를 첫 페인트 전에 적용 (FOUC 방지) + JS 활성 표시 -->
     <script is:inline>
       (function () {
+        // .js 클래스가 있을 때만 reveal 요소를 숨긴다 → JS 비활성 시 콘텐츠 항상 표시
+        document.documentElement.classList.add("js");
         try {
           var t = localStorage.getItem("theme");
           if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
@@ -27,6 +29,11 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   </head>
   <body>
+    <div class="aurora" aria-hidden="true">
+      <b class="b1"></b>
+      <b class="b2"></b>
+      <b class="b3"></b>
+    </div>
     <nav class="topbar">
       <div class="topbar-inner">
         <a href={base} class="brand">
@@ -66,6 +73,50 @@ const base = raw.endsWith("/") ? raw : raw + "/";
           try { localStorage.setItem("theme", next); } catch (e) {}
           window.dispatchEvent(new CustomEvent("themechange", { detail: next }));
         });
+      })();
+    </script>
+
+    <!-- 스크롤 등장 · 포인터 글로우 · 상단바 그림자 -->
+    <script is:inline>
+      (function () {
+        var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        // 스크롤 등장: 뷰포트 진입 시 .is-visible 부여 (한 번만)
+        var reveals = document.querySelectorAll("[data-reveal]");
+        if (reduce || !("IntersectionObserver" in window)) {
+          reveals.forEach(function (el) { el.classList.add("is-visible"); });
+        } else {
+          var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+              if (en.isIntersecting) {
+                en.target.classList.add("is-visible");
+                io.unobserve(en.target);
+              }
+            });
+          }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+          reveals.forEach(function (el) { io.observe(el); });
+        }
+
+        // 포인터 추적 글로우: 커서 위치를 CSS 변수로
+        if (!reduce) {
+          window.addEventListener("pointermove", function (e) {
+            var t = e.target.closest ? e.target.closest("[data-glow]") : null;
+            if (!t) return;
+            var r = t.getBoundingClientRect();
+            t.style.setProperty("--gx", ((e.clientX - r.left) / r.width) * 100 + "%");
+            t.style.setProperty("--gy", ((e.clientY - r.top) / r.height) * 100 + "%");
+          }, { passive: true });
+        }
+
+        // 상단바 스크롤 그림자
+        var topbar = document.querySelector(".topbar");
+        if (topbar) {
+          var onScroll = function () {
+            topbar.classList.toggle("scrolled", window.scrollY > 4);
+          };
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+        }
       })();
     </script>
   </body>

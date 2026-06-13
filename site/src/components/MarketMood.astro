@@ -1,0 +1,64 @@
+---
+import history from "../data/history.json";
+import { Activity, TrendingUp, TrendingDown, Minus } from "@lucide/astro";
+
+// 최신 스냅샷의 종목 등락으로 '오늘의 시장 무드'를 요약한다.
+// 환율(KRW=X)은 방향성이 모호해 집계에서 제외 — 주식·지수만 본다.
+const latest = history.length ? history[history.length - 1] : null;
+const equities = latest
+  ? latest.quotes.filter((q) => q.ticker !== "KRW=X" && Number.isFinite(q.change_pct))
+  : [];
+
+const ups = equities.filter((q) => q.change_pct > 0).length;
+const downs = equities.filter((q) => q.change_pct < 0).length;
+const flats = equities.length - ups - downs;
+const decided = ups + downs;
+const avg = equities.length
+  ? equities.reduce((s, q) => s + q.change_pct, 0) / equities.length
+  : 0;
+
+// 게이지 비율 (무승부 제외) — 한국식: 상승=빨강
+const upPct = decided ? Math.round((ups / decided) * 100) : 50;
+const downPct = 100 - upPct;
+
+// 무드 판정: 평균 등락과 상승 비율을 함께 본다
+let tone = "flat";
+let label = "혼조세";
+if (upPct >= 60 && avg > 0) { tone = "up"; label = "강세 우위"; }
+else if (upPct <= 40 && avg < 0) { tone = "down"; label = "약세 우위"; }
+else if (avg >= 0.4) { tone = "up"; label = "강세 우위"; }
+else if (avg <= -0.4) { tone = "down"; label = "약세 우위"; }
+
+const avgText = (avg >= 0 ? "+" : "") + avg.toFixed(2) + "%";
+const show = equities.length >= 1;
+---
+
+{show && (
+  <section class="mood card" data-reveal data-glow aria-label="오늘의 시장 무드">
+    <div class="mood-top">
+      <span class={`mood-label ${tone}`}>
+        {tone === "up" ? <TrendingUp size={18} /> : tone === "down" ? <TrendingDown size={18} /> : <Minus size={18} />}
+        {label}
+      </span>
+      <span class="mood-counts">
+        <span class="up">{ups}↑</span> · <span class="down">{downs}↓</span>
+        {flats > 0 && <> · {flats}—</>}
+      </span>
+    </div>
+    <div class="mood-bar">
+      <span class="seg up" style={`--w:${upPct}%`}></span>
+      <span class="seg down" style={`--w:${downPct}%`}></span>
+    </div>
+    <p class="mood-sub">
+      <Activity size={12} /> {latest.date} 기준 · 관심종목 평균 {avgText}
+    </p>
+  </section>
+)}
+
+<style>
+  .mood-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+</style>

@@ -43,14 +43,14 @@ function sparkline(points) {
 ---
 
 {latest && (
-  <section class="quotes rise">
+  <section class="quotes">
     <p class="asof"><Clock size={13} /> 시세 기준: {latest.date}</p>
     <div class="grid">
-      {latest.quotes.map((q) => {
+      {latest.quotes.map((q, i) => {
         const spark = sparkline(closesByTicker[q.ticker]);
         const dir = cls(q.change_pct);
         return (
-          <div class={`card card-lift quote ${dir}-edge`}>
+          <div class={`card card-lift quote ${dir}-edge`} data-reveal data-glow style={`--i:${i}`}>
             <div class="name">{q.name}</div>
             <div class="close" data-countup={q.close} data-decimals={decimalsOf(q.close)}>{fmt(q.close)}</div>
             <div class={`pill ${dir}`}>

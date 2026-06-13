@@ -13,6 +13,7 @@
   --up: #ff4d5e;   /* 한국식: 상승=빨강 */
   --down: #4d8aff; /* 하락=파랑 */
   --glow: #15203a66;
+  --av: #7b61ff; /* aurora violet */
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   --radius: 14px;
 }
@@ -29,6 +30,7 @@
   --up: #e02440;
   --down: #2459e0;
   --glow: #cdd9f555;
+  --av: #8a7bff;
   --shadow: 0 8px 24px rgba(23, 32, 58, 0.08);
 }
 
@@ -181,14 +183,20 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
 }
 .b-section > :last-child { margin-bottom: 0; }
 
-/* 목차 점프 링크 */
+/* 목차 점프 링크 (스크롤스파이 — sticky) */
 .toc {
+  position: sticky;
+  top: 56px;
+  z-index: 30;
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 2px 2px 10px;
-  margin: 18px 0 6px;
+  padding: 10px 2px;
+  margin: 14px -2px 6px;
   scrollbar-width: thin;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .toc a {
   flex-shrink: 0;
@@ -207,3 +215,153 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: var(--card-hover);
 }
+.toc a.active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--up)));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ══════════════════════════════════════════════
+   생동감 레이어 — aurora · scroll-reveal · glow ·
+   시장 무드 게이지 · 읽기 진행바
+   ══════════════════════════════════════════════ */
+
+/* ── 무빙 오로라 배경 ────────────────────────── */
+.aurora {
+  position: fixed;
+  inset: -12vmax;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.aurora b {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.42;
+  mix-blend-mode: screen;
+}
+.aurora .b1 {
+  width: 46vmax; height: 46vmax; top: -8vmax; left: -6vmax;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 82%, transparent), transparent 70%);
+  animation: aurora1 26s ease-in-out infinite alternate;
+}
+.aurora .b2 {
+  width: 40vmax; height: 40vmax; top: -4vmax; right: -8vmax;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--up) 70%, transparent), transparent 70%);
+  animation: aurora2 31s ease-in-out infinite alternate;
+}
+.aurora .b3 {
+  width: 44vmax; height: 44vmax; bottom: -16vmax; left: 32%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--av) 78%, transparent), transparent 70%);
+  animation: aurora3 35s ease-in-out infinite alternate;
+}
+:root[data-theme="light"] .aurora b { opacity: 0.28; mix-blend-mode: multiply; }
+@keyframes aurora1 { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(8vmax,6vmax,0) scale(1.15); } }
+@keyframes aurora2 { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-7vmax,5vmax,0) scale(1.1); } }
+@keyframes aurora3 { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-5vmax,-8vmax,0) scale(1.2); } }
+@media (prefers-reduced-motion: reduce) { .aurora b { animation: none; } }
+
+/* ── 스크롤 등장 (JS 활성 시에만 숨김 → no-JS 폴백) ── */
+html.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.6s cubic-bezier(0.2, 0.7, 0.3, 1),
+    transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: calc(var(--i, 0) * 55ms);
+  will-change: opacity, transform;
+}
+html.js [data-reveal].is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.js [data-reveal] { opacity: 1; transform: none; transition: none; }
+}
+
+/* ── 포인터 추적 글로우 ──────────────────────── */
+[data-glow] { position: relative; }
+[data-glow]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    200px circle at var(--gx, 50%) var(--gy, 50%),
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    transparent 55%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+[data-glow]:hover::after { opacity: 1; }
+:root[data-theme="light"] [data-glow]::after {
+  mix-blend-mode: multiply;
+  background: radial-gradient(
+    200px circle at var(--gx, 50%) var(--gy, 50%),
+    color-mix(in srgb, var(--accent) 13%, transparent),
+    transparent 55%
+  );
+}
+@media (prefers-reduced-motion: reduce) { [data-glow]::after { display: none; } }
+
+/* ── 상단바 스크롤 그림자 ────────────────────── */
+.topbar.scrolled { box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28); }
+:root[data-theme="light"] .topbar.scrolled { box-shadow: 0 6px 20px rgba(23, 32, 58, 0.08); }
+
+/* ── 읽기 진행바 ─────────────────────────────── */
+.read-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  z-index: 60;
+  background: linear-gradient(90deg, var(--accent), var(--up));
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: width 0.12s ease-out;
+}
+
+/* ── 시장 무드 게이지 ────────────────────────── */
+.mood { padding: 16px 20px; margin-bottom: 14px; }
+.mood-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+.mood-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+.mood-counts {
+  color: var(--sub);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mood-counts .up { color: var(--up); }
+.mood-counts .down { color: var(--down); }
+.mood-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+}
+.mood-bar .seg { width: 0; transition: width 1s cubic-bezier(0.2, 0.7, 0.3, 1) 0.15s; }
+.mood-bar .seg.up { background: linear-gradient(90deg, color-mix(in srgb, var(--up) 65%, transparent), var(--up)); }
+.mood-bar .seg.down { background: linear-gradient(90deg, var(--down), color-mix(in srgb, var(--down) 65%, transparent)); }
+.mood.is-visible .seg,
+html:not(.js) .mood .seg { width: var(--w); }
+.mood-sub { margin: 9px 0 0; color: var(--sub); font-size: 0.78rem; }
+@media (prefers-reduced-motion: reduce) { .mood-bar .seg { transition: none; } }

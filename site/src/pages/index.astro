@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from "astro:content";
 import Base from "../layouts/Base.astro";
+import MarketMood from "../components/MarketMood.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
 import BriefingArticle from "../components/BriefingArticle.astro";
@@ -17,6 +18,7 @@ if (latest) ({ Content } = await render(latest));
 ---
 
 <Base>
+  <MarketMood />
   <QuoteCards />
   <MarketChart />
 
@@ -32,8 +34,8 @@ if (latest) ({ Content } = await render(latest));
     <section class="recent">
       <h2><Newspaper size={15} /> 지난 브리핑</h2>
       <div class="list">
-        {recent.map((b) => (
-          <a class="card card-lift item" href={`${base}briefings/${b.id}/`}>
+        {recent.map((b, i) => (
+          <a class="card card-lift item" data-reveal data-glow style={`--i:${i}`} href={`${base}briefings/${b.id}/`}>
             <strong>{b.id}</strong>
             <ChevronRight size={16} class="go" />
           </a>
