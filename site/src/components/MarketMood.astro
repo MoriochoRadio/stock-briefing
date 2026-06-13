@@ -1,12 +1,21 @@
 ---
 import history from "../data/history.json";
-import { marketOf, kindOf, sectorOf } from "../lib/groups";
-import { Activity, TrendingUp, TrendingDown, Minus } from "@lucide/astro";
+import sentiment from "../data/sentiment.json";
+import { kindOf } from "../lib/groups";
+import { Activity, TrendingUp, TrendingDown, Minus, Gauge } from "@lucide/astro";
 
-// 최신 스냅샷의 종목 등락으로 '오늘의 시장 분위기'를 그룹·분야별로 요약한다.
-// 환율(KRW=X)은 방향성이 모호해 모든 집계에서 제외한다.
+// 상단 '시장 분위기'.
+//  - 내 관심종목: 워치리스트 개별주(history 최신)
+//  - 한국/미국/총합: 시장 전체를 대표하는 섹터 ETF 바스켓(sentiment.json)
+//  - 분야별: 섹터 ETF 등락 그대로
+//  - 공포·탐욕 지수: CNN Fear & Greed(미국)
 const latest = history.length ? history[history.length - 1] : null;
-const quotes = (latest ? latest.quotes : []).filter((q) => Number.isFinite(q.change_pct));
+const watchStocks = (latest ? latest.quotes : []).filter(
+  (q) => kindOf(q.ticker) === "stock" && Number.isFinite(q.change_pct),
+);
+const us = (sentiment.us ?? []).filter((q) => Number.isFinite(q.change_pct));
+const kr = (sentiment.kr ?? []).filter((q) => Number.isFinite(q.change_pct));
+const fng = sentiment.fng ?? null;
 
 function summarize(items) {
   const ups = items.filter((q) => q.change_pct > 0).length;
@@ -20,76 +29,88 @@ function summarize(items) {
   else if ((upPct <= 40 && avg < 0) || avg <= -0.4) { tone = "down"; label = "약세"; }
   return { count: items.length, ups, downs, avg, upPct, downPct: 100 - upPct, tone, label };
 }
-
 const avgText = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+const ToneIcon = (tone) => (tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : Minus);
 
-// 4개 그룹 게이지
 const groups = [
-  { name: "내 관심종목", items: quotes.filter((q) => kindOf(q.ticker) === "stock") },
-  { name: "한국시장", items: quotes.filter((q) => marketOf(q.ticker) === "kr") },
-  { name: "미국시장", items: quotes.filter((q) => marketOf(q.ticker) === "us") },
-  { name: "총합", items: quotes.filter((q) => kindOf(q.ticker) !== "fx") },
+  { name: "내 관심종목", items: watchStocks },
+  { name: "한국시장", items: kr },
+  { name: "미국시장", items: us },
+  { name: "총합", items: [...us, ...kr] },
 ]
   .map((g) => ({ name: g.name, s: summarize(g.items) }))
   .filter((g) => g.s.count > 0);
 
-// 분야(섹터)별 강·약세
-const bySector = {};
-for (const q of quotes) {
-  const sec = sectorOf(q.ticker);
-  if (!sec) continue;
-  (bySector[sec] ??= []).push(q.change_pct);
-}
-const sectors = Object.entries(bySector)
-  .map(([name, arr]) => {
-    const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
-    return { name, avg, count: arr.length, tone: avg > 0 ? "up" : avg < 0 ? "down" : "flat" };
-  })
-  .sort((a, b) => b.avg - a.avg);
+const toSectors = (arr) =>
+  [...arr]
+    .map((q) => ({ name: q.name, avg: q.change_pct, tone: q.change_pct > 0 ? "up" : q.change_pct < 0 ? "down" : "flat" }))
+    .sort((a, b) => b.avg - a.avg);
+const usSectors = toSectors(us);
+const krSectors = toSectors(kr);
 
-const ToneIcon = (tone) => (tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : Minus);
-const show = groups.length > 0;
+// 공포·탐욕 게이지: 점수(0~100) → 색/라벨 톤
+const fngTone = fng ? (fng.rating.includes("greed") ? "up" : fng.rating.includes("fear") ? "down" : "flat") : "flat";
+const show = groups.length > 0 || fng;
 ---
 
 {show && (
   <section class="mood card" data-reveal data-glow aria-label="오늘의 시장 분위기">
     <div class="mood-head">
       <Activity size={16} /> 오늘의 시장 분위기
-      {latest && <span class="asof">{latest.date} 기준</span>}
+      {sentiment.asOf && <span class="asof">{sentiment.asOf} 기준</span>}
     </div>
 
-    <div class="mood-grid">
-      {groups.map((g) => {
-        const Icon = ToneIcon(g.s.tone);
-        return (
-          <div class="mood-cell">
-            <div class="mood-cell-top">
-              <span class="mc-name">{g.name}</span>
-              <span class={`mc-label ${g.s.tone}`}><Icon size={14} /> {g.s.label}</span>
-            </div>
-            <div class="mood-bar">
-              <span class="seg up" style={`--w:${g.s.upPct}%`}></span>
-              <span class="seg down" style={`--w:${g.s.downPct}%`}></span>
-            </div>
-            <div class="mc-meta">
-              <span class="up">{g.s.ups}↑</span> <span class="down">{g.s.downs}↓</span> · 평균 {avgText(g.s.avg)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    {fng && (
+      <div class="fng">
+        <div class="fng-top">
+          <span class="fng-title"><Gauge size={14} /> 공포·탐욕 지수 <span class="fng-src">미국 · CNN</span></span>
+          <span class={`fng-score ${fngTone}`}>{fng.score}<em>{fng.label}</em></span>
+        </div>
+        <div class="fng-track"><span class="fng-marker" style={`--p:${fng.score}%`}></span></div>
+        <div class="fng-scale"><span>공포</span><span>중립</span><span>탐욕</span></div>
+      </div>
+    )}
 
-    {sectors.length > 0 && (
-      <div class="mood-sectors">
-        <span class="ms-title">분야별</span>
-        {sectors.map((s) => {
-          const Icon = ToneIcon(s.tone);
+    {groups.length > 0 && (
+      <div class="mood-grid">
+        {groups.map((g) => {
+          const Icon = ToneIcon(g.s.tone);
           return (
-            <span class={`ms-chip ${s.tone}`}>
-              <Icon size={12} /> {s.name} <b>{avgText(s.avg)}</b>
-            </span>
+            <div class="mood-cell">
+              <div class="mood-cell-top">
+                <span class="mc-name">{g.name}</span>
+                <span class={`mc-label ${g.s.tone}`}><Icon size={14} /> {g.s.label}</span>
+              </div>
+              <div class="mood-bar">
+                <span class="seg up" style={`--w:${g.s.upPct}%`}></span>
+                <span class="seg down" style={`--w:${g.s.downPct}%`}></span>
+              </div>
+              <div class="mc-meta">
+                <span class="up">{g.s.ups}↑</span> <span class="down">{g.s.downs}↓</span> · 평균 {avgText(g.s.avg)}
+              </div>
+            </div>
           );
         })}
+      </div>
+    )}
+
+    {(usSectors.length > 0 || krSectors.length > 0) && (
+      <div class="mood-sectors">
+        {[{ flag: "🇺🇸", label: "미국 섹터", list: usSectors }, { flag: "🇰🇷", label: "한국 섹터", list: krSectors }]
+          .filter((row) => row.list.length > 0)
+          .map((row) => (
+            <div class="ms-row">
+              <span class="ms-title">{row.flag} {row.label}</span>
+              <div class="ms-chips">
+                {row.list.map((s) => {
+                  const Icon = ToneIcon(s.tone);
+                  return (
+                    <span class={`ms-chip ${s.tone}`}><Icon size={12} /> {s.name} <b>{avgText(s.avg)}</b></span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
       </div>
     )}
   </section>

@@ -145,6 +145,67 @@ def build_series(cfg, period="1y"):
         print(f"series: {len(out)} ticker(s)")
 
 
+FNG_LABELS = {
+    "extreme fear": "극단적 공포",
+    "fear": "공포",
+    "neutral": "중립",
+    "greed": "탐욕",
+    "extreme greed": "극단적 탐욕",
+}
+
+
+def fetch_fng():
+    """CNN Fear & Greed Index (미국 기준). 봇 차단 회피용 브라우저 헤더 필요. 실패 시 None."""
+    url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.cnn.com/markets/fear-and-greed",
+        "Origin": "https://www.cnn.com",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=20) as r:
+            j = json.loads(r.read())
+        fg = j["fear_and_greed"]
+        rating = str(fg.get("rating", "")).lower()
+        return {"score": round(float(fg["score"]), 1), "rating": rating, "label": FNG_LABELS.get(rating, rating)}
+    except Exception as e:
+        print(f"[warn] fng: {e}")
+        return None
+
+
+def build_sentiment(cfg, data):
+    """상단 '시장 분위기'용 데이터: 섹터 ETF 등락(미/한) + CNN 탐욕지수.
+    네트워크 실패로 일부가 비어도 직전 sentiment.json 값을 유지한다."""
+    path = ROOT / "site" / "src" / "data" / "sentiment.json"
+    prev = {}
+    if path.exists():
+        try:
+            prev = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            prev = {}
+
+    def slim(quotes):
+        return [{"ticker": q["ticker"], "name": q["name"], "change_pct": q["change_pct"]} for q in quotes]
+
+    us = slim(fetch_quotes(cfg.get("breadth_us", [])))
+    kr = slim(fetch_quotes(cfg.get("breadth_kr", [])))
+    fng = fetch_fng()
+
+    out = {
+        "asOf": data["date_kst"],
+        "fng": fng or prev.get("fng"),
+        "us": us or prev.get("us", []),
+        "kr": kr or prev.get("kr", []),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    print(f"sentiment: us={len(out['us'])} kr={len(out['kr'])} fng={'ok' if out['fng'] else 'none'}")
+
+
 def main():
     cfg = load_config()
     now = datetime.now(KST)
@@ -162,6 +223,7 @@ def main():
     if data["indices"] or data["watchlist_us"] or data["watchlist_kr"]:
         update_history(data)
     build_series(cfg)
+    build_sentiment(cfg, data)
     print(f"saved {out} — quotes:{len(data['indices'])+len(data['watchlist_us'])+len(data['watchlist_kr'])}, news:{len(data['news'])}")
 
 

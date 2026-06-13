@@ -342,6 +342,38 @@ html.js [data-reveal].is-visible { opacity: 1; transform: none; }
   font-size: 0.76rem;
   font-weight: 600;
 }
+
+/* 공포·탐욕 지수 게이지 */
+.fng { margin-bottom: 16px; }
+.fng-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.fng-title { display: inline-flex; align-items: center; gap: 6px; font-size: 0.84rem; font-weight: 700; color: var(--sub); }
+.fng-src { opacity: 0.7; font-weight: 600; font-size: 0.72rem; }
+.fng-score { display: inline-flex; align-items: baseline; gap: 7px; font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.fng-score em { font-size: 0.82rem; font-weight: 700; font-style: normal; }
+.fng-track {
+  position: relative;
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4d8aff 0%, #6f7da0 50%, #ff4d5e 100%);
+  border: 1px solid var(--border);
+}
+.fng-marker {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--card);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  transition: left 1s cubic-bezier(0.2, 0.7, 0.3, 1) 0.15s;
+}
+.mood.is-visible .fng-marker,
+html:not(.js) .fng-marker { left: var(--p); }
+.fng-scale { display: flex; justify-content: space-between; margin-top: 5px; color: var(--sub); font-size: 0.7rem; }
+@media (prefers-reduced-motion: reduce) { .fng-marker { transition: none; } }
 .mood-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -370,14 +402,15 @@ html:not(.js) .mood .seg { width: var(--w); }
 .mc-meta .down { color: var(--down); }
 .mood-sectors {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
-.ms-title { font-size: 0.78rem; font-weight: 700; color: var(--sub); margin-right: 2px; }
+.ms-row { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.ms-title { flex-shrink: 0; padding-top: 4px; font-size: 0.78rem; font-weight: 700; color: var(--sub); }
+.ms-chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .ms-chip {
   display: inline-flex;
   align-items: center;

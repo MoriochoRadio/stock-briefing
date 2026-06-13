@@ -20,6 +20,35 @@ watchlist_kr:
   - { ticker: "005930.KS", name: "삼성전자" }
   - { ticker: "000660.KS", name: "SK하이닉스" }
 
+# 시장 분위기·분야별용 바스켓 (섹터 ETF = 시장 전체를 분야별로 대표).
+# 시세 카드에는 안 뜨고, 상단 '시장 분위기'의 한국/미국/총합 집계와 분야별 칩에만 쓰임.
+breadth_us:   # 미국 SPDR 섹터 ETF
+  - { ticker: "XLK",  name: "기술" }
+  - { ticker: "XLF",  name: "금융" }
+  - { ticker: "XLE",  name: "에너지" }
+  - { ticker: "XLV",  name: "헬스케어" }
+  - { ticker: "XLY",  name: "자유소비재" }
+  - { ticker: "XLP",  name: "필수소비재" }
+  - { ticker: "XLI",  name: "산업재" }
+  - { ticker: "XLB",  name: "소재" }
+  - { ticker: "XLU",  name: "유틸리티" }
+  - { ticker: "XLRE", name: "부동산" }
+  - { ticker: "XLC",  name: "커뮤니케이션" }
+
+breadth_kr:   # 한국 KODEX 섹터 ETF
+  - { ticker: "091160.KS", name: "반도체" }
+  - { ticker: "305720.KS", name: "2차전지" }
+  - { ticker: "091180.KS", name: "자동차" }
+  - { ticker: "091170.KS", name: "은행" }
+  - { ticker: "102970.KS", name: "증권" }
+  - { ticker: "266420.KS", name: "헬스케어" }
+  - { ticker: "244580.KS", name: "바이오" }
+  - { ticker: "266360.KS", name: "콘텐츠" }
+  - { ticker: "117460.KS", name: "에너지화학" }
+  - { ticker: "117680.KS", name: "철강" }
+  - { ticker: "117700.KS", name: "건설" }
+  - { ticker: "140710.KS", name: "운송" }
+
 # 뉴스 검색 키워드 (Google News RSS)
 news_queries:
   - { q: "미국 증시 마감",            lang: "ko" }
