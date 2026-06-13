@@ -206,6 +206,67 @@ def build_sentiment(cfg, data):
     print(f"sentiment: us={len(out['us'])} kr={len(out['kr'])} fng={'ok' if out['fng'] else 'none'}")
 
 
+def _news_category(query):
+    q = (query or "").lower()
+    if "환율" in query or "krw" in q:
+        return "환율"
+    if any(k in query for k in ["코스피", "삼성", "하이닉스"]):
+        return "국내증시"
+    if any(k in q for k in ["openai", "anthropic", "xai", "ipo"]):
+        return "AI·테크"
+    if "nvidia" in q:
+        return "엔비디아"
+    if "oracle" in q:
+        return "오라클"
+    if "tesla" in q:
+        return "테슬라"
+    if "증시" in query or "stock" in q or "market" in q:
+        return "해외증시"
+    return "마켓"
+
+
+def _split_source(title):
+    """Google News 제목은 'Headline - Source' 형식 → 헤드라인/출처 분리."""
+    i = title.rfind(" - ")
+    if i > 0:
+        return title[:i].strip(), title[i + 3:].strip()
+    return title.strip(), ""
+
+
+def build_news(data, limit=10):
+    """수집한 헤드라인을 사이트 노출용 news.json으로 기록(카테고리 라운드로빈으로 다양성 확보)."""
+    path = ROOT / "site" / "src" / "data" / "news.json"
+    groups = {}
+    for n in data.get("news", []):
+        groups.setdefault(n.get("query", ""), []).append(n)
+    # 쿼리별로 한 건씩 번갈아 뽑아 한쪽 주제 쏠림 방지
+    ordered, i = [], 0
+    while any(i < len(v) for v in groups.values()):
+        for lst in groups.values():
+            if i < len(lst):
+                ordered.append(lst[i])
+        i += 1
+    seen, items = set(), []
+    for n in ordered:
+        headline, source = _split_source(n.get("title", ""))
+        if not headline or headline in seen:
+            continue
+        seen.add(headline)
+        items.append({
+            "title": headline,
+            "source": source,
+            "link": n.get("link", ""),
+            "pub": n.get("pub", ""),
+            "cat": _news_category(n.get("query", "")),
+        })
+        if len(items) >= limit:
+            break
+    out = {"asOf": data["date_kst"], "items": items}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    print(f"news: {len(items)} headline(s)")
+
+
 def main():
     cfg = load_config()
     now = datetime.now(KST)
@@ -224,6 +285,7 @@ def main():
         update_history(data)
     build_series(cfg)
     build_sentiment(cfg, data)
+    build_news(data)
     print(f"saved {out} — quotes:{len(data['indices'])+len(data['watchlist_us'])+len(data['watchlist_kr'])}, news:{len(data['news'])}")
 
 

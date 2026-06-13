@@ -5,6 +5,7 @@ import Hero from "../components/Hero.astro";
 import MarketMood from "../components/MarketMood.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
+import NewsHeadlines from "../components/NewsHeadlines.astro";
 import BriefingArticle from "../components/BriefingArticle.astro";
 import { ChevronRight } from "@lucide/astro";
 
@@ -28,6 +29,9 @@ if (latest) ({ Content } = await render(latest));
 
   <div class="eyebrow"><span class="tag">TREND</span> 지수 추이 <span class="line"></span></div>
   <MarketChart />
+
+  <div class="eyebrow"><span class="tag">NEWS</span> 주요 헤드라인 <span class="line"></span></div>
+  <NewsHeadlines />
 
   <div class="eyebrow"><span class="tag">BRIEFING</span> 오늘의 브리핑 <span class="line"></span></div>
   {latest ? (
