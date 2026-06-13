@@ -1,64 +1,96 @@
 ---
 import history from "../data/history.json";
+import { marketOf, kindOf, sectorOf } from "../lib/groups";
 import { Activity, TrendingUp, TrendingDown, Minus } from "@lucide/astro";
 
-// 최신 스냅샷의 종목 등락으로 '오늘의 시장 무드'를 요약한다.
-// 환율(KRW=X)은 방향성이 모호해 집계에서 제외 — 주식·지수만 본다.
+// 최신 스냅샷의 종목 등락으로 '오늘의 시장 분위기'를 그룹·분야별로 요약한다.
+// 환율(KRW=X)은 방향성이 모호해 모든 집계에서 제외한다.
 const latest = history.length ? history[history.length - 1] : null;
-const equities = latest
-  ? latest.quotes.filter((q) => q.ticker !== "KRW=X" && Number.isFinite(q.change_pct))
-  : [];
+const quotes = (latest ? latest.quotes : []).filter((q) => Number.isFinite(q.change_pct));
 
-const ups = equities.filter((q) => q.change_pct > 0).length;
-const downs = equities.filter((q) => q.change_pct < 0).length;
-const flats = equities.length - ups - downs;
-const decided = ups + downs;
-const avg = equities.length
-  ? equities.reduce((s, q) => s + q.change_pct, 0) / equities.length
-  : 0;
+function summarize(items) {
+  const ups = items.filter((q) => q.change_pct > 0).length;
+  const downs = items.filter((q) => q.change_pct < 0).length;
+  const avg = items.length ? items.reduce((s, q) => s + q.change_pct, 0) / items.length : 0;
+  const decided = ups + downs;
+  const upPct = decided ? Math.round((ups / decided) * 100) : 50;
+  let tone = "flat";
+  let label = "혼조";
+  if ((upPct >= 60 && avg > 0) || avg >= 0.4) { tone = "up"; label = "강세"; }
+  else if ((upPct <= 40 && avg < 0) || avg <= -0.4) { tone = "down"; label = "약세"; }
+  return { count: items.length, ups, downs, avg, upPct, downPct: 100 - upPct, tone, label };
+}
 
-// 게이지 비율 (무승부 제외) — 한국식: 상승=빨강
-const upPct = decided ? Math.round((ups / decided) * 100) : 50;
-const downPct = 100 - upPct;
+const avgText = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
 
-// 무드 판정: 평균 등락과 상승 비율을 함께 본다
-let tone = "flat";
-let label = "혼조세";
-if (upPct >= 60 && avg > 0) { tone = "up"; label = "강세 우위"; }
-else if (upPct <= 40 && avg < 0) { tone = "down"; label = "약세 우위"; }
-else if (avg >= 0.4) { tone = "up"; label = "강세 우위"; }
-else if (avg <= -0.4) { tone = "down"; label = "약세 우위"; }
+// 4개 그룹 게이지
+const groups = [
+  { name: "내 관심종목", items: quotes.filter((q) => kindOf(q.ticker) === "stock") },
+  { name: "한국시장", items: quotes.filter((q) => marketOf(q.ticker) === "kr") },
+  { name: "미국시장", items: quotes.filter((q) => marketOf(q.ticker) === "us") },
+  { name: "총합", items: quotes.filter((q) => kindOf(q.ticker) !== "fx") },
+]
+  .map((g) => ({ name: g.name, s: summarize(g.items) }))
+  .filter((g) => g.s.count > 0);
 
-const avgText = (avg >= 0 ? "+" : "") + avg.toFixed(2) + "%";
-const show = equities.length >= 1;
+// 분야(섹터)별 강·약세
+const bySector = {};
+for (const q of quotes) {
+  const sec = sectorOf(q.ticker);
+  if (!sec) continue;
+  (bySector[sec] ??= []).push(q.change_pct);
+}
+const sectors = Object.entries(bySector)
+  .map(([name, arr]) => {
+    const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+    return { name, avg, count: arr.length, tone: avg > 0 ? "up" : avg < 0 ? "down" : "flat" };
+  })
+  .sort((a, b) => b.avg - a.avg);
+
+const ToneIcon = (tone) => (tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : Minus);
+const show = groups.length > 0;
 ---
 
 {show && (
-  <section class="mood card" data-reveal data-glow aria-label="오늘의 시장 무드">
-    <div class="mood-top">
-      <span class={`mood-label ${tone}`}>
-        {tone === "up" ? <TrendingUp size={18} /> : tone === "down" ? <TrendingDown size={18} /> : <Minus size={18} />}
-        {label}
-      </span>
-      <span class="mood-counts">
-        <span class="up">{ups}↑</span> · <span class="down">{downs}↓</span>
-        {flats > 0 && <> · {flats}—</>}
-      </span>
+  <section class="mood card" data-reveal data-glow aria-label="오늘의 시장 분위기">
+    <div class="mood-head">
+      <Activity size={16} /> 오늘의 시장 분위기
+      {latest && <span class="asof">{latest.date} 기준</span>}
     </div>
-    <div class="mood-bar">
-      <span class="seg up" style={`--w:${upPct}%`}></span>
-      <span class="seg down" style={`--w:${downPct}%`}></span>
+
+    <div class="mood-grid">
+      {groups.map((g) => {
+        const Icon = ToneIcon(g.s.tone);
+        return (
+          <div class="mood-cell">
+            <div class="mood-cell-top">
+              <span class="mc-name">{g.name}</span>
+              <span class={`mc-label ${g.s.tone}`}><Icon size={14} /> {g.s.label}</span>
+            </div>
+            <div class="mood-bar">
+              <span class="seg up" style={`--w:${g.s.upPct}%`}></span>
+              <span class="seg down" style={`--w:${g.s.downPct}%`}></span>
+            </div>
+            <div class="mc-meta">
+              <span class="up">{g.s.ups}↑</span> <span class="down">{g.s.downs}↓</span> · 평균 {avgText(g.s.avg)}
+            </div>
+          </div>
+        );
+      })}
     </div>
-    <p class="mood-sub">
-      <Activity size={12} /> {latest.date} 기준 · 관심종목 평균 {avgText}
-    </p>
+
+    {sectors.length > 0 && (
+      <div class="mood-sectors">
+        <span class="ms-title">분야별</span>
+        {sectors.map((s) => {
+          const Icon = ToneIcon(s.tone);
+          return (
+            <span class={`ms-chip ${s.tone}`}>
+              <Icon size={12} /> {s.name} <b>{avgText(s.avg)}</b>
+            </span>
+          );
+        })}
+      </div>
+    )}
   </section>
 )}
-
-<style>
-  .mood-sub {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-</style>
