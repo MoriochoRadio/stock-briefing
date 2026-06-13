@@ -111,6 +111,40 @@ def update_history(data, keep_days=120):
     print(f"history: {len(history)} day(s)")
 
 
+def build_series(cfg, period="1y"):
+    """차트용 종목별 일봉 종가 시계열을 site/src/data/series.json에 기록.
+    스파크라인·지수 추이 차트가 '작업 이후'가 아닌 실제 과거 데이터를 쓰도록 한다."""
+    path = ROOT / "site" / "src" / "data" / "series.json"
+    items = cfg["indices"] + cfg["watchlist_us"] + cfg["watchlist_kr"]
+    out = {}
+    for item in items:
+        t = item["ticker"]
+        try:
+            hist = yf.Ticker(t).history(period=period)
+            arr = []
+            for ts, close in hist["Close"].items():
+                c = float(close)
+                if not math.isfinite(c):
+                    continue
+                arr.append([str(ts.date()), round(c, 2)])
+            if len(arr) >= 2:
+                out[t] = arr
+        except Exception as e:
+            print(f"[warn] series {t}: {e}")
+    if out:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # 빈 응답으로 일부 티커가 빠져도 기존 series.json을 통째로 날리지 않도록 병합
+        if path.exists():
+            try:
+                prev = json.loads(path.read_text(encoding="utf-8"))
+                for k, v in prev.items():
+                    out.setdefault(k, v)
+            except Exception:
+                pass
+        path.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+        print(f"series: {len(out)} ticker(s)")
+
+
 def main():
     cfg = load_config()
     now = datetime.now(KST)
@@ -127,6 +161,7 @@ def main():
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     if data["indices"] or data["watchlist_us"] or data["watchlist_kr"]:
         update_history(data)
+    build_series(cfg)
     print(f"saved {out} — quotes:{len(data['indices'])+len(data['watchlist_us'])+len(data['watchlist_kr'])}, news:{len(data['news'])}")
 
 

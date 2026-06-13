@@ -1,24 +1,35 @@
 ---
 import history from "../data/history.json";
+import seriesData from "../data/series.json";
 import { ChartLine } from "@lucide/astro";
 
-// 코스피·나스닥·S&P500을 첫날=100으로 정규화한 추이 (2일 이상 누적 시 표시)
+// 코스피·나스닥·S&P500을 시작일=100으로 정규화한 추이.
+// 실제 과거 시계열(series.json, 최근 ~180영업일) 우선, 없으면 작업 이후 누적(history.json).
 const TARGETS = [
-  { ticker: "^KS11", color: "#ff4d5e" },
-  { ticker: "^IXIC", color: "#5b9dff" },
-  { ticker: "^GSPC", color: "#a78bfa" },
+  { ticker: "^KS11", color: "#ff4d5e", name: "코스피" },
+  { ticker: "^IXIC", color: "#5b9dff", name: "나스닥" },
+  { ticker: "^GSPC", color: "#a78bfa", name: "S&P 500" },
 ];
+const allSeries = seriesData as Record<string, [string, number][]>;
+const WINDOW = 180;
 
-const series = [];
-for (const { ticker, color } of TARGETS) {
-  const points = [];
-  let name = ticker;
+function pointsFor(ticker) {
+  const s = allSeries[ticker];
+  if (s && s.length >= 2) {
+    return s.slice(-WINDOW).map((p) => ({ time: p[0], value: p[1] }));
+  }
+  // 폴백: 작업 이후 누적 스냅샷
+  const pts = [];
   for (const snap of history) {
     const q = snap.quotes.find((x) => x.ticker === ticker);
-    if (!q) continue;
-    name = q.name;
-    points.push({ time: snap.date, value: q.close });
+    if (q) pts.push({ time: snap.date, value: q.close });
   }
+  return pts;
+}
+
+const series = [];
+for (const { ticker, color, name } of TARGETS) {
+  const points = pointsFor(ticker);
   if (points.length < 2) continue;
   const first = points[0].value;
   series.push({
@@ -35,7 +46,7 @@ const payload = JSON.stringify(series);
 {show && (
   <section class="card chart-card" data-reveal>
     <header class="chart-head">
-      <h2 class="chart-title"><ChartLine size={16} /> 지수 추이 <span class="hint">시작일=100 기준</span></h2>
+      <h2 class="chart-title"><ChartLine size={16} /> 지수 추이 <span class="hint">최근 6개월 · 시작일=100</span></h2>
       <div class="legend">
         {series.map((s) => (
           <span class="legend-item"><i style={`background:${s.color}`}></i>{s.name}</span>

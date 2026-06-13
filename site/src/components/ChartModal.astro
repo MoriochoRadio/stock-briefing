@@ -1,0 +1,100 @@
+---
+// 관심종목/지수 카드를 누르면 TradingView 실시간 상세 차트를 모달로 띄운다.
+// tv.js는 첫 클릭 시에만 지연 로드 → 평소 페이지는 가볍게 유지.
+import { X } from "@lucide/astro";
+---
+
+<div id="tv-modal" class="tv-modal" hidden>
+  <div class="tv-modal-backdrop" data-close></div>
+  <div class="tv-modal-card" role="dialog" aria-modal="true" aria-labelledby="tv-modal-title">
+    <header class="tv-modal-head">
+      <strong id="tv-modal-title"></strong>
+      <button type="button" class="tv-modal-close" data-close aria-label="닫기"><X size={18} /></button>
+    </header>
+    <div class="tv-modal-body"><div id="tv-widget"></div></div>
+    <p class="tv-modal-foot">차트·데이터 제공: TradingView · 실시간(한국거래소 등 일부 시장은 지연될 수 있음)</p>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    var modal = document.getElementById("tv-modal");
+    if (!modal) return;
+    var titleEl = document.getElementById("tv-modal-title");
+    var host = document.getElementById("tv-widget");
+    var current = null;
+    var lastFocus = null;
+
+    function theme() {
+      return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+    }
+
+    function loadTv(cb) {
+      if (window.TradingView && window.TradingView.widget) return cb();
+      var existing = document.getElementById("tv-js");
+      if (existing) { existing.addEventListener("load", cb, { once: true }); return; }
+      var s = document.createElement("script");
+      s.id = "tv-js";
+      s.src = "https://s3.tradingview.com/tv.js";
+      s.onload = cb;
+      s.onerror = function () {
+        host.innerHTML = '<p class="tv-err">차트를 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.</p>';
+      };
+      document.head.appendChild(s);
+    }
+
+    function build() {
+      if (!current || !(window.TradingView && window.TradingView.widget)) return;
+      host.innerHTML = "";
+      new window.TradingView.widget({
+        container_id: "tv-widget",
+        symbol: current.symbol,
+        autosize: true,
+        interval: "D",
+        timezone: "Asia/Seoul",
+        theme: theme(),
+        style: "1",
+        locale: "kr",
+        withdateranges: true,
+        allow_symbol_change: false,
+        hide_side_toolbar: false,
+      });
+    }
+
+    function open(symbol, name) {
+      current = { symbol: symbol, name: name };
+      lastFocus = document.activeElement;
+      titleEl.textContent = (name ? name + "  ·  " : "") + symbol;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+      loadTv(build);
+      var closeBtn = modal.querySelector(".tv-modal-close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function close() {
+      modal.hidden = true;
+      document.body.classList.remove("modal-open");
+      host.innerHTML = "";
+      current = null;
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    document.addEventListener("click", function (e) {
+      var trigger = e.target.closest ? e.target.closest("[data-tv]") : null;
+      if (trigger) { e.preventDefault(); open(trigger.getAttribute("data-tv"), trigger.getAttribute("data-name") || ""); return; }
+      if (e.target.closest && e.target.closest("[data-close]")) close();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hidden) { close(); return; }
+      if (e.key === "Enter" || e.key === " ") {
+        var trigger = e.target.closest ? e.target.closest("[data-tv]") : null;
+        if (trigger) { e.preventDefault(); open(trigger.getAttribute("data-tv"), trigger.getAttribute("data-name") || ""); }
+      }
+    });
+
+    // 테마 전환 시 열려 있으면 위젯 테마도 다시 그림
+    window.addEventListener("themechange", function () { if (!modal.hidden) build(); });
+  })();
+</script>

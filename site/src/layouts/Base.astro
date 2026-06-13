@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import ChartModal from "../components/ChartModal.astro";
 import { TrendingUp, Archive, Sun, Moon } from "@lucide/astro";
 
 const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
@@ -61,6 +62,8 @@ const base = raw.endsWith("/") ? raw : raw + "/";
       자동 생성 브리핑 · 투자 권유가 아닌 정보 제공입니다 ·
       <a href="https://github.com" rel="noopener">GitHub Actions로 매일 07:00 KST 갱신</a>
     </footer>
+
+    <ChartModal />
 
     <script is:inline>
       (function () {

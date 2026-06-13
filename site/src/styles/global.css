@@ -365,3 +365,77 @@ html.js [data-reveal].is-visible { opacity: 1; transform: none; }
 html:not(.js) .mood .seg { width: var(--w); }
 .mood-sub { margin: 9px 0 0; color: var(--sub); font-size: 0.78rem; }
 @media (prefers-reduced-motion: reduce) { .mood-bar .seg { transition: none; } }
+
+/* ── TradingView 실시간 차트 모달 ────────────── */
+body.modal-open { overflow: hidden; }
+.tv-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 3vw;
+}
+.tv-modal[hidden] { display: none; }
+.tv-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, #05070d 62%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.tv-modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(960px, 100%);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: modal-in 0.28s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .tv-modal-card { animation: none; } }
+.tv-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.tv-modal-head strong { font-size: 0.98rem; font-weight: 800; letter-spacing: -0.01em; }
+.tv-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--sub);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.tv-modal-close:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.tv-modal-body { flex: 1; min-height: 0; height: 70vh; }
+.tv-modal-body #tv-widget,
+.tv-modal-body #tv-widget iframe { width: 100% !important; height: 100% !important; }
+.tv-err { padding: 28px; color: var(--sub); text-align: center; }
+.tv-modal-foot {
+  margin: 0;
+  padding: 9px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--sub);
+  font-size: 0.74rem;
+}
