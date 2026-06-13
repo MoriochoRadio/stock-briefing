@@ -59,8 +59,14 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     </main>
 
     <footer class="footer">
-      자동 생성 브리핑 · 투자 권유가 아닌 정보 제공입니다 ·
-      <a href="https://github.com" rel="noopener">GitHub Actions로 매일 07:00 KST 갱신</a>
+      <div class="footer-inner">
+        <span class="foot-brand">
+          <span class="brand-mark"><TrendingUp size={15} stroke-width={2.5} /></span>
+          아침 시장 브리핑
+        </span>
+        <p class="foot-meta">자동 생성 브리핑 · 투자 권유가 아닌 정보 제공입니다.</p>
+        <p class="foot-sub">매일 07:00 KST · GitHub Actions 갱신 · 데이터 Yahoo Finance · CNN</p>
+      </div>
     </footer>
 
     <ChartModal />
@@ -161,7 +167,8 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     height: 28px;
     border-radius: 9px;
     color: #fff;
-    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--up)));
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 4px 14px -2px color-mix(in srgb, var(--accent) 55%, transparent);
   }
   .topbar-right { display: flex; align-items: center; gap: 6px; }
   .nav-link {
@@ -192,14 +199,24 @@ const base = raw.endsWith("/") ? raw : raw + "/";
   }
   #theme-toggle:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 
-  .container { max-width: 920px; margin: 0 auto; padding: 18px 20px 80px; }
+  .container { max-width: 940px; margin: 0 auto; padding: 22px 20px 84px; }
   .footer {
-    max-width: 920px;
-    margin: 0 auto;
-    padding: 24px 20px 48px;
-    color: var(--sub);
-    font-size: 0.8rem;
+    max-width: 940px;
+    margin: 56px auto 0;
+    padding: 26px 20px 52px;
     border-top: 1px solid var(--border);
   }
-  .footer a { color: var(--sub); }
+  .footer-inner { display: flex; flex-direction: column; gap: 6px; }
+  .foot-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 800;
+    font-size: 0.96rem;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .foot-meta { margin: 0; color: var(--sub); font-size: 0.82rem; }
+  .foot-sub { margin: 0; color: color-mix(in srgb, var(--sub) 75%, transparent); font-size: 0.76rem; }
 </style>

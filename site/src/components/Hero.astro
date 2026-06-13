@@ -1,0 +1,40 @@
+---
+import sentiment from "../data/sentiment.json";
+
+// 홈 상단 마스트헤드: 큰 날짜 + 시장 한 줄 요약(섹터 ETF 총합 + 공포·탐욕).
+const { date } = Astro.props as { date?: string };
+const asOf = date ?? sentiment.asOf ?? "";
+
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+let dateText = asOf;
+let weekday = "";
+if (asOf) {
+  const d = new Date(asOf + "T00:00:00");
+  if (!Number.isNaN(d.getTime())) {
+    weekday = WD[d.getDay()];
+    dateText = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  }
+}
+
+const all = [...(sentiment.us ?? []), ...(sentiment.kr ?? [])].filter((q) => Number.isFinite(q.change_pct));
+const ups = all.filter((q) => q.change_pct > 0).length;
+const avg = all.length ? all.reduce((s, q) => s + q.change_pct, 0) / all.length : 0;
+const upRatio = all.length ? ups / all.length : 0.5;
+let mood = "혼조세";
+let moodTone = "flat";
+if ((upRatio >= 0.6 && avg > 0) || avg >= 0.4) { mood = "강세 우위"; moodTone = "up"; }
+else if ((upRatio <= 0.4 && avg < 0) || avg <= -0.4) { mood = "약세 우위"; moodTone = "down"; }
+
+const fng = sentiment.fng ?? null;
+---
+
+<header class="hero" data-reveal>
+  <p class="hero-eyebrow">오늘의 브리핑</p>
+  <h1 class="hero-date">{dateText} {weekday && <span class="hero-wd">{weekday}요일</span>}</h1>
+  {all.length > 0 && (
+    <p class="hero-sum">
+      간밤 흐름을 반영해 오늘 시장은 <b class={moodTone}>{mood}</b>로 출발합니다.
+      {fng && <> 미국 투자심리는 <b>{fng.label} {fng.score}</b> 수준입니다.</>}
+    </p>
+  )}
+</header>

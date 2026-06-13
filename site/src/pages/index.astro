@@ -1,11 +1,12 @@
 ---
 import { getCollection, render } from "astro:content";
 import Base from "../layouts/Base.astro";
+import Hero from "../components/Hero.astro";
 import MarketMood from "../components/MarketMood.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
 import BriefingArticle from "../components/BriefingArticle.astro";
-import { Newspaper, ChevronRight } from "@lucide/astro";
+import { ChevronRight } from "@lucide/astro";
 
 const raw = import.meta.env.BASE_URL;
 const base = raw.endsWith("/") ? raw : raw + "/";
@@ -18,10 +19,17 @@ if (latest) ({ Content } = await render(latest));
 ---
 
 <Base>
+  <Hero date={latest?.id} />
+
   <MarketMood />
+
+  <div class="eyebrow"><span class="tag">QUOTES</span> 주요 시세 <span class="line"></span></div>
   <QuoteCards />
+
+  <div class="eyebrow"><span class="tag">TREND</span> 지수 추이 <span class="line"></span></div>
   <MarketChart />
 
+  <div class="eyebrow"><span class="tag">BRIEFING</span> 오늘의 브리핑 <span class="line"></span></div>
   {latest ? (
     <BriefingArticle>
       <Content />
@@ -32,7 +40,7 @@ if (latest) ({ Content } = await render(latest));
 
   {recent.length > 0 && (
     <section class="recent">
-      <h2><Newspaper size={15} /> 지난 브리핑</h2>
+      <div class="eyebrow"><span class="tag">ARCHIVE</span> 지난 브리핑 <span class="line"></span></div>
       <div class="list">
         {recent.map((b, i) => (
           <a class="card card-lift item" data-reveal data-glow style={`--i:${i}`} href={`${base}briefings/${b.id}/`}>

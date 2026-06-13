@@ -16,6 +16,7 @@ const base = raw.endsWith("/") ? raw : raw + "/";
 ---
 
 <Base title={`아침 시장 브리핑 — ${entry.id}`}>
+  <div class="eyebrow"><span class="tag">BRIEFING</span> {entry.id} <span class="line"></span></div>
   <BriefingArticle>
     <Content />
   </BriefingArticle>

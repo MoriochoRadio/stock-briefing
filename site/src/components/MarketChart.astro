@@ -46,7 +46,7 @@ const payload = JSON.stringify(series);
 {show && (
   <section class="card chart-card" data-reveal>
     <header class="chart-head">
-      <h2 class="chart-title"><ChartLine size={16} /> 지수 추이 <span class="hint">최근 6개월 · 시작일=100</span></h2>
+      <span class="chart-cap"><ChartLine size={14} /> 최근 6개월 · 시작일=100 기준</span>
       <div class="legend">
         {series.map((s) => (
           <span class="legend-item"><i style={`background:${s.color}`}></i>{s.name}</span>
@@ -123,7 +123,7 @@ const payload = JSON.stringify(series);
 </script>
 
 <style>
-  .chart-card { margin-top: 14px; padding: 18px 20px; }
+  .chart-card { margin-top: 4px; padding: 18px 20px; }
   .chart-head {
     display: flex;
     align-items: center;
@@ -132,14 +132,14 @@ const payload = JSON.stringify(series);
     gap: 8px;
     margin-bottom: 12px;
   }
-  .chart-title {
+  .chart-cap {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    font-size: 0.95rem;
-    margin: 0;
+    gap: 6px;
+    color: var(--sub);
+    font-size: 0.8rem;
+    font-weight: 600;
   }
-  .hint { color: var(--sub); font-weight: 400; font-size: 0.78rem; }
   .legend { display: flex; gap: 12px; flex-wrap: wrap; }
   .legend-item {
     display: inline-flex;
