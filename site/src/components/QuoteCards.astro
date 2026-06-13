@@ -21,6 +21,19 @@ const sparkPoints = (ticker) => {
   return closesByTicker[ticker];
 };
 
+// 52주(≈1년) 고/저 대비 현재가 위치 — Yahoo/Bloomberg 스타일 레인지 바
+const range52 = (ticker) => {
+  const s = allSeries[ticker];
+  if (!s || s.length < 10) return null;
+  const closes = s.map((p) => p[1]).filter((n) => Number.isFinite(n));
+  const lo = Math.min(...closes);
+  const hi = Math.max(...closes);
+  if (!(hi > lo)) return null;
+  const cur = closes[closes.length - 1];
+  const pos = Math.max(0, Math.min(100, ((cur - lo) / (hi - lo)) * 100));
+  return { lo, hi, pos };
+};
+
 // 표시 소수 자릿수: 원본 값의 소수부 길이(최대 2)
 const decimalsOf = (n) => {
   const s = String(n);
@@ -57,6 +70,7 @@ function sparkline(points) {
     <div class="grid">
       {latest.quotes.map((q, i) => {
         const spark = sparkline(sparkPoints(q.ticker));
+        const r = range52(q.ticker);
         const dir = cls(q.change_pct);
         const tv = tvSymbol(q.ticker);
         const tvAttrs = tv
@@ -70,6 +84,12 @@ function sparkline(points) {
               {q.change_pct > 0 ? <TrendingUp size={13} /> : q.change_pct < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
               {q.change_pct > 0 ? "+" : q.change_pct < 0 ? "-" : ""}{Math.abs(q.change_pct).toFixed(2)}%
             </div>
+            {r && (
+              <div class="r52" title={`52주 범위 ${fmt(r.lo)} ~ ${fmt(r.hi)}`}>
+                <span class="r52-cap">52주</span>
+                <span class="r52-track"><span class={`r52-dot ${dir}`} style={`left:${r.pos.toFixed(1)}%`}></span></span>
+              </div>
+            )}
             {spark && (
               <svg class={`spark ${dir}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
                 <path d={spark.area} fill="currentColor" opacity="0.12" />
@@ -162,6 +182,38 @@ function sparkline(points) {
     margin: 2px 0 6px;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
+  }
+  .r52 {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 10px;
+  }
+  .r52-cap {
+    flex-shrink: 0;
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: var(--sub);
+    letter-spacing: 0.02em;
+  }
+  .r52-track {
+    position: relative;
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--down), color-mix(in srgb, var(--sub) 40%, transparent), var(--up));
+    opacity: 0.85;
+  }
+  .r52-dot {
+    position: absolute;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--card);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   }
   .spark {
     display: block;
