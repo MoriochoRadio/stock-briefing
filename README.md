@@ -26,6 +26,8 @@ GitHub Actions (매일 07:00 KST)
  └─ GitHub Pages 배포 → https://<아이디>.github.io/<레포명>/
 ```
 
+> 정기 실행(cron) 외에, **main에 코드를 push하면** 사이트가 자동으로 다시 빌드·배포됩니다. 이때는 데이터 수집·브리핑 생성을 건너뛰고 빌드·배포만 수행해 무료 API 쿼터를 아낍니다.
+
 ## 배포 방법 (10분)
 
 1. **레포 만들기** — GitHub에서 New repository → 이름 `stock-briefing`, **Public** (Actions 무료 무제한).
@@ -50,7 +52,8 @@ GitHub Actions (매일 07:00 KST)
 
 6. **테스트 실행** — Actions 탭 → "Daily Stock Briefing" → Run workflow.
    완료 후 `https://<아이디>.github.io/stock-briefing/` 접속 → 끝!
-   현재 레포의 경우 "https://moriochoradio.github.io/stock-briefing/"
+   현재 레포의 경우 https://moriochoradio.github.io/stock-briefing/
+   > 이후 디자인·코드를 수정해 main에 push하면 자동으로 사이트가 재배포됩니다.
 
 ## 커스터마이징
 
