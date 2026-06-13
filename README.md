@@ -10,13 +10,19 @@
 
 **기술 스택**: Python(yfinance, Google News RSS) · Gemini API · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
 
+## 주요 화면
+
+- **메인** — 오늘의 브리핑, 주요 헤드라인, 시장 분위기(공포·탐욕 지수), 관심종목 시세 카드(52주 범위 바)·지수 차트
+- **대시보드** (`/dashboard`) — 벤토 그리드 레이아웃의 마켓 대시보드, 섹터 히트맵
+- **아카이브** — 날짜별 과거 브리핑 모아보기
+
 ## 동작 구조
 
 ```
 GitHub Actions (매일 07:00 KST)
  ├─ fetch_data.py : yfinance 시세 + Google News RSS 수집, 시세 히스토리 누적 (무료, 키 불필요)
  ├─ generate.py   : Gemini가 데이터를 브리핑으로 분석·작성 → briefings/날짜.md 커밋
- ├─ Astro 빌드    : site/ → 시세 카드 + 지수 차트 + 브리핑 + 아카이브 페이지
+ ├─ Astro 빌드    : site/ → 메인(브리핑·헤드라인·시세·차트) + 대시보드(히트맵) + 아카이브
  └─ GitHub Pages 배포 → https://<아이디>.github.io/<레포명>/
 ```
 
