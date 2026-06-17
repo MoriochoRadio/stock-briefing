@@ -1,42 +1,50 @@
 @import "tailwindcss";
 
-/* 디자인 토큰 — data-theme 속성으로 다크/라이트 전환 (기본: 다크) */
+/* ══════════════════════════════════════════════
+   디자인 토큰 — "동트는 시장(Daybreak)"
+   개장 전 새벽: 천정의 남색 하늘 → 지평선의 일출 앰버.
+   data-theme 로 다크(새벽)/라이트(아침) 전환. 기본: 다크.
+   ══════════════════════════════════════════════ */
 :root {
-  --bg: #080b12;
-  --bg-soft: #0e131e;
-  --card: #121826;
-  --card-hover: #192032;
-  --border: #212a3d;
-  --border-soft: #1a2130;
-  --text: #e9ecf4;
-  --sub: #8b93a9;
-  --accent: #818cf8;    /* 브랜드: 인디고 (하락=파랑과 구분) */
-  --accent-2: #a78bfa;  /* 그라데이션 끝: 바이올렛 */
-  --up: #ff4d5e;   /* 한국식: 상승=빨강 */
+  --bg: #0a0f1e;        /* 천정 — 동트기 전 남색 */
+  --bg-soft: #0f1528;   /* 하늘 한 톤 아래 */
+  --card: #141c34;      /* 밤하늘 면(카드) */
+  --card-hover: #1a2440;
+  --border: #243054;
+  --border-soft: #1b2440;
+  --text: #eef1fb;
+  --sub: #93a0c0;
+  --accent: #f4b266;    /* 브랜드: 일출 앰버 (상승=빨강·하락=파랑과 구분) */
+  --accent-2: #ffd9a0;  /* 그라데이션 끝: 첫 햇살 */
+  --first-light: #ffe6bf; /* 해 중심·일출선 하이라이트 */
+  --up: #ff5d6c;   /* 한국식: 상승=빨강 */
   --down: #4d8aff; /* 하락=파랑 */
-  --glow: #1b1f4a55;
-  --av: #7b61ff; /* aurora violet */
+  --glow: #f4b2661f;       /* 지평선 dawn-glow */
+  --horizon: #f4b266;      /* 일출선 */
+  --horizon-2: #ff8e63;    /* 일출 코랄(해 중심) */
   --shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.55);
   --hairline: color-mix(in srgb, #ffffff 6%, transparent);
   --radius: 16px;
 }
 
 :root[data-theme="light"] {
-  --bg: #f5f7fc;
-  --bg-soft: #eef1f8;
+  --bg: #fbf7f0;        /* 아침 — 따뜻한 종이 */
+  --bg-soft: #f4eee3;
   --card: #ffffff;
-  --card-hover: #f7f9ff;
-  --border: #e4e9f4;
-  --border-soft: #edf1f8;
-  --text: #161d33;
-  --sub: #5f6a85;
-  --accent: #6366f1;
-  --accent-2: #7c3aed;
+  --card-hover: #fdfaf4;
+  --border: #ece3d4;
+  --border-soft: #f2ebde;
+  --text: #1f1a14;
+  --sub: #756a58;
+  --accent: #9a5012;    /* 라이트: 텍스트 대비 AA(4.5:1↑) 충족하는 번트 앰버 */
+  --accent-2: #e89b4e;  /* 장식 채움(브랜드마크·게이지)용 밝은 앰버 */
+  --first-light: #f7c97e;
   --up: #e02440;
   --down: #2459e0;
-  --glow: #d7defb66;
-  --av: #8a7bff;
-  --shadow: 0 18px 40px -16px rgba(23, 32, 58, 0.18);
+  --glow: #f4b26622;
+  --horizon: #e89b4e;
+  --horizon-2: #f08a4e;
+  --shadow: 0 18px 40px -16px rgba(60, 45, 23, 0.16);
   --hairline: color-mix(in srgb, #ffffff 70%, transparent);
 }
 
@@ -52,17 +60,56 @@
   --color-up: var(--up);
   --color-down: var(--down);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
+  /* 숫자·라틴·라벨 전용 — 시세에 고유한 인상 */
+  --font-num: "Space Grotesk", "Pretendard Variable", ui-monospace, sans-serif;
+}
+
+/* 숫자·지표·라벨에 Space Grotesk 적용 (tabular figures) */
+.font-num,
+.close,
+.fng-score,
+.fng-big,
+.hero-date,
+.idx-close, .idx-chg,
+.w-close, .w-chg,
+.ht-val,
+.pill {
+  font-family: var(--font-num);
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
 html {
   scroll-behavior: smooth;
 }
 
+/* 본문 바로가기 — 키보드 포커스 시에만 노출 */
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 200;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transform: translateY(-150%);
+  transition: transform 0.18s ease;
+}
+.skip-link:focus { transform: translateY(0); outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+
 body {
   margin: 0;
+  /* 새벽 하늘: 천정 남색 → 아래로 갈수록 따뜻해지는 박명 */
   background:
-    radial-gradient(1100px 480px at 72% -8%, var(--glow), transparent),
-    var(--bg);
+    radial-gradient(140% 70% at 50% 100%, color-mix(in srgb, var(--horizon) 9%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 55%, color-mix(in srgb, var(--bg) 86%, var(--horizon)) 100%);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-sans);
   line-height: 1.75;
@@ -109,9 +156,10 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
 }
 .eyebrow .tag {
   flex-shrink: 0;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-family: var(--font-num);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   color: var(--accent);
   padding: 4px 9px;
   border-radius: 7px;
@@ -121,16 +169,52 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
 .eyebrow .line {
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, var(--border), transparent);
+  /* 동트는 빛이 번지듯 — 라벨 쪽에서 앰버가 옅게 퍼진다 */
+  background: linear-gradient(90deg, color-mix(in srgb, var(--horizon) 45%, var(--border)), transparent 72%);
 }
 
-/* ── Hero 마스트헤드 ─────────────────────────── */
-.hero { margin: 12px 2px 6px; }
+/* ── Hero 마스트헤드 (대시보드·아카이브 공용 지평선 밴드) ── */
+.hero {
+  position: relative;
+  margin: 8px 0 18px;
+  padding: 24px 26px 28px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background:
+    radial-gradient(120% 120% at 86% 150%, color-mix(in srgb, var(--horizon) 20%, transparent), transparent 56%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 92%, #000) 0%, var(--bg-soft) 100%);
+  box-shadow: inset 0 1px 0 0 var(--hairline);
+}
+/* 떠오르는 해 — 오른쪽 하단에서 */
+.hero::before {
+  content: "";
+  position: absolute;
+  right: 6%;
+  bottom: -34px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, var(--first-light), var(--horizon) 48%, var(--horizon-2));
+  box-shadow: 0 0 50px 12px color-mix(in srgb, var(--horizon) 50%, transparent);
+  pointer-events: none;
+}
+/* 지평선 */
+.hero::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--horizon) 70%, transparent) 35%, var(--first-light) 60%, transparent);
+  box-shadow: 0 0 20px 3px color-mix(in srgb, var(--horizon) 40%, transparent);
+}
+.hero > * { position: relative; z-index: 1; }
 .hero-eyebrow {
   margin: 0 0 10px;
+  font-family: var(--font-num);
   font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  font-weight: 600;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -263,6 +347,26 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
 }
 .b-section > :last-child { margin-bottom: 0; }
 
+/* 첫 섹션(1분 요약 등) = 오늘 아침의 리드 — 동튼 빛이 위에서 스며든다 */
+.b-section:first-of-type {
+  position: relative;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--horizon) 7%, var(--card)), var(--card) 64%);
+  border-color: color-mix(in srgb, var(--horizon) 26%, var(--border));
+}
+.b-section:first-of-type::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--horizon) 75%, transparent) 40%, var(--first-light) 60%, transparent);
+}
+.b-section:first-of-type > p:first-of-type {
+  font-size: 1.04rem;
+  color: var(--text);
+}
+
 /* 목차 점프 링크 (스크롤스파이 — sticky) */
 .toc {
   position: sticky;
@@ -307,41 +411,39 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
    시장 무드 게이지 · 읽기 진행바
    ══════════════════════════════════════════════ */
 
-/* ── 무빙 오로라 배경 ────────────────────────── */
+/* ── 지평선 dawn-glow (오로라 대체: 단일 광원으로 절제) ── */
 .aurora {
   position: fixed;
-  inset: -12vmax;
+  inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
 }
+/* 화면 하단에서 천천히 숨쉬는 일출빛 — 단 하나의 광원 */
 .aurora b {
   position: absolute;
   display: block;
+  left: 50%;
+  bottom: -42vmax;
+  width: 120vmax;
+  height: 80vmax;
+  transform: translateX(-50%);
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.42;
+  filter: blur(70px);
+  opacity: 0.5;
   mix-blend-mode: screen;
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--horizon-2) 70%, transparent),
+    color-mix(in srgb, var(--horizon) 40%, transparent) 38%,
+    transparent 66%);
+  animation: dawn-breathe 14s ease-in-out infinite alternate;
 }
-.aurora .b1 {
-  width: 46vmax; height: 46vmax; top: -8vmax; left: -6vmax;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 82%, transparent), transparent 70%);
-  animation: aurora1 26s ease-in-out infinite alternate;
+.aurora .b2, .aurora .b3 { display: none; }  /* 단일 광원 */
+:root[data-theme="light"] .aurora b { opacity: 0.4; mix-blend-mode: multiply; }
+@keyframes dawn-breathe {
+  from { opacity: 0.4; transform: translateX(-50%) translateY(0) scale(1); }
+  to   { opacity: 0.6; transform: translateX(-50%) translateY(-3vmax) scale(1.06); }
 }
-.aurora .b2 {
-  width: 40vmax; height: 40vmax; top: -4vmax; right: -8vmax;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--up) 70%, transparent), transparent 70%);
-  animation: aurora2 31s ease-in-out infinite alternate;
-}
-.aurora .b3 {
-  width: 44vmax; height: 44vmax; bottom: -16vmax; left: 32%;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--av) 78%, transparent), transparent 70%);
-  animation: aurora3 35s ease-in-out infinite alternate;
-}
-:root[data-theme="light"] .aurora b { opacity: 0.28; mix-blend-mode: multiply; }
-@keyframes aurora1 { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(8vmax,6vmax,0) scale(1.15); } }
-@keyframes aurora2 { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-7vmax,5vmax,0) scale(1.1); } }
-@keyframes aurora3 { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-5vmax,-8vmax,0) scale(1.2); } }
 @media (prefers-reduced-motion: reduce) { .aurora b { animation: none; } }
 
 /* ── 스크롤 등장 (JS 활성 시에만 숨김 → no-JS 폴백) ── */

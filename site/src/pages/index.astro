@@ -77,7 +77,13 @@ if (latest) ({ Content } = await render(latest));
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
-  .item :global(.go) { color: var(--accent); }
+  .item :global(.go) { color: var(--accent); transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1); }
+  @media (hover: hover) and (pointer: fine) {
+    .item:hover :global(.go) { transform: translateX(3px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .item :global(.go) { transition: none; }
+  }
   .more {
     display: inline-block;
     margin-top: 14px;

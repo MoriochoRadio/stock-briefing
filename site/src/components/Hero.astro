@@ -1,7 +1,10 @@
 ---
 import sentiment from "../data/sentiment.json";
+import history from "../data/history.json";
 
-// 홈 상단 마스트헤드: 큰 날짜 + 시장 한 줄 요약(섹터 ETF 총합 + 공포·탐욕).
+// 시그니처 "지평선 히어로": 개장 전 새벽 한 장면.
+//  - 떠오르는 해의 높이·온도 = 오늘 시장 무드(상승 우위일수록 높고 따뜻)
+//  - 지평선 위로 솟은 빛 = 밤사이 미국장 + 한국 지수의 등락
 const { date } = Astro.props as { date?: string };
 const asOf = date ?? sentiment.asOf ?? "";
 
@@ -26,15 +29,218 @@ if ((upRatio >= 0.6 && avg > 0) || avg >= 0.4) { mood = "강세 우위"; moodTon
 else if ((upRatio <= 0.4 && avg < 0) || avg <= -0.4) { mood = "약세 우위"; moodTone = "down"; }
 
 const fng = sentiment.fng ?? null;
+
+// 해가 지평선 위로 떠오른 정도: 상승 비율↑ → 더 높이. 막 동튼 느낌(3~27%).
+const sunLevel = Math.round(3 + upRatio * 24);
+
+// 지평선 위로 솟는 주요 지수 — 밤사이 미국장 + 한국
+const latest = history.length ? history[history.length - 1] : null;
+const wantIdx = [
+  { t: "^DJI", short: "다우" },
+  { t: "^GSPC", short: "S&P" },
+  { t: "^IXIC", short: "나스닥" },
+  { t: "^KS11", short: "코스피" },
+];
+const idx = wantIdx
+  .map(({ t, short }) => {
+    const q = latest?.quotes?.find((x) => x.ticker === t);
+    if (!q || !Number.isFinite(q.change_pct)) return null;
+    const tone = q.change_pct > 0 ? "up" : q.change_pct < 0 ? "down" : "flat";
+    // 등락(±2.5% 기준)을 지평선 위 높이 22~74%로 매핑 (라벨 잘림 방지)
+    const h = Math.max(22, Math.min(74, 48 + (q.change_pct / 2.5) * 26));
+    return { short, change: q.change_pct, tone, h: Math.round(h) };
+  })
+  .filter(Boolean);
+const fmtPct = (p: number) => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(2) + "%";
 ---
 
-<header class="hero" data-reveal>
-  <p class="hero-eyebrow">오늘의 브리핑</p>
-  <h1 class="hero-date">{dateText} {weekday && <span class="hero-wd">{weekday}요일</span>}</h1>
-  {all.length > 0 && (
-    <p class="hero-sum">
-      간밤 흐름을 반영해 오늘 시장은 <b class={moodTone}>{mood}</b>로 출발합니다.
-      {fng && <> 미국 투자심리는 <b>{fng.label} {fng.score}</b> 수준입니다.</>}
-    </p>
-  )}
+<header class={`hero-sky ${moodTone}`} data-reveal>
+  <div class="stage" style={`--sun:${sunLevel}`} aria-hidden="true">
+    <span class="sun"></span>
+    {idx.length > 0 && (
+      <div class="constellation">
+        {idx.map((ix, i) => (
+          <span class={`star ${ix.tone}`} style={`--x:${16 + i * (68 / Math.max(1, idx.length - 1))}%; --h:${ix.h}%; --d:${i * 120}ms`}>
+            <i class="dot"></i>
+            <b class="lab">{ix.short}</b>
+            <b class="chg">{fmtPct(ix.change)}</b>
+          </span>
+        ))}
+      </div>
+    )}
+    <span class="horizon-line"></span>
+  </div>
+
+  <div class="copy">
+    <p class="hero-eyebrow">오늘 아침의 시장</p>
+    <h1 class="hero-date">{dateText} {weekday && <span class="hero-wd">{weekday}요일</span>}</h1>
+    {all.length > 0 && (
+      <p class="hero-sum">
+        간밤 흐름을 반영해 오늘 시장은 <b class={moodTone}>{mood}</b>로 동틉니다.
+        {fng && <> 미국 투자심리는 <b>{fng.label} {fng.score}</b> 수준입니다.</>}
+      </p>
+    )}
+  </div>
 </header>
+
+<style>
+  .hero-sky {
+    position: relative;
+    margin: 8px 0 10px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background:
+      radial-gradient(120% 80% at 50% 116%, color-mix(in srgb, var(--horizon) 22%, transparent), transparent 62%),
+      linear-gradient(180deg, color-mix(in srgb, var(--bg) 92%, #000) 0%, var(--bg-soft) 100%);
+    box-shadow: inset 0 1px 0 0 var(--hairline);
+  }
+
+  /* ── 하늘 무대 ───────────────────────────── */
+  .stage {
+    position: relative;
+    height: clamp(150px, 30vw, 230px);
+    overflow: hidden;
+  }
+  /* 떠오르는 해 — bottom 위치를 --sun(%)으로, 톤으로 온도 조절 */
+  .sun {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--sun, 12) * 1%);
+    width: clamp(72px, 14vw, 116px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(circle at 50% 42%,
+      var(--first-light) 0%, var(--horizon) 46%, var(--horizon-2) 100%);
+    box-shadow:
+      0 0 60px 14px color-mix(in srgb, var(--horizon) 55%, transparent),
+      0 0 150px 56px color-mix(in srgb, var(--horizon-2) 28%, transparent);
+    animation: sun-rise 1.4s cubic-bezier(0.22, 0.7, 0.25, 1) both;
+  }
+  .hero-sky.down .sun {
+    /* 약세: 해를 차갑고 낮게 — 흐린 새벽 */
+    background: radial-gradient(circle at 50% 50%,
+      color-mix(in srgb, var(--first-light) 60%, var(--down)) 0%,
+      color-mix(in srgb, var(--horizon) 55%, var(--down)) 60%,
+      var(--down) 100%);
+    filter: saturate(0.8);
+  }
+  @keyframes sun-rise {
+    from { bottom: -32%; opacity: 0; }
+    to   { bottom: calc(var(--sun, 12) * 1%); opacity: 1; }
+  }
+
+  /* 지평선 위로 솟은 지수 */
+  .constellation { position: absolute; inset: 0; }
+  .star {
+    position: absolute;
+    left: var(--x);
+    bottom: 0;
+    height: var(--h);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 4px;
+    transform: translateX(-50%);
+  }
+  .star .dot {
+    position: absolute;
+    top: -3px;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 12px 2px currentColor;
+  }
+  .star::before {  /* 지평선에서 솟는 가는 광선 */
+    content: "";
+    position: absolute;
+    left: 50%; bottom: 0; top: 0;
+    width: 1.5px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, currentColor, transparent);
+    opacity: 0.5;
+  }
+  .star .lab {
+    position: absolute;
+    top: -26px;
+    font-family: var(--font-num);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--sub);
+    white-space: nowrap;
+  }
+  .star .chg {
+    position: absolute;
+    top: -42px;
+    font-family: var(--font-num);
+    font-size: 0.68rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .star.up { color: var(--up); }
+  .star.down { color: var(--down); }
+  .star.flat { color: var(--sub); }
+  .star .lab { color: var(--sub); }
+
+  /* 부드러운 등장 */
+  html.js [data-reveal] .star { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  html.js [data-reveal].is-visible .star {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    transition: opacity 0.5s ease var(--d, 0ms), transform 0.5s cubic-bezier(0.2,0.7,0.3,1) var(--d, 0ms);
+  }
+
+  /* 지평선 */
+  .horizon-line {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent, color-mix(in srgb, var(--horizon) 75%, transparent) 30%,
+      var(--first-light) 50%, color-mix(in srgb, var(--horizon) 75%, transparent) 70%, transparent);
+    box-shadow: 0 0 24px 4px color-mix(in srgb, var(--horizon) 45%, transparent);
+  }
+
+  /* ── 카피 ────────────────────────────────── */
+  .copy { padding: 20px 24px 22px; }
+  .hero-eyebrow {
+    margin: 0 0 9px;
+    font-family: var(--font-num);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .hero-date {
+    margin: 0;
+    font-size: clamp(1.75rem, 5vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    background: linear-gradient(110deg, var(--text) 30%, var(--horizon));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero-date .hero-wd { color: var(--sub); -webkit-text-fill-color: var(--sub); font-weight: 600; }
+  .hero-sum {
+    margin: 12px 0 0;
+    max-width: 60ch;
+    color: var(--sub);
+    font-size: 0.98rem;
+    line-height: 1.7;
+  }
+  .hero-sum b { font-weight: 700; color: var(--text); }
+  .hero-sum b.up { color: var(--up); }
+  .hero-sum b.down { color: var(--down); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sun { animation: none; bottom: calc(var(--sun, 12) * 1%); opacity: 1; }
+    html.js [data-reveal] .star,
+    html.js [data-reveal].is-visible .star { opacity: 1; transform: translateX(-50%); transition: none; }
+  }
+</style>

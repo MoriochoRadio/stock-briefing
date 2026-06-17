@@ -28,14 +28,19 @@ const base = raw.endsWith("/") ? raw : raw + "/";
       })();
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <!-- 숫자·라틴·라벨 전용 디스플레이 (시세에 고유한 인상) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" />
   </head>
   <body>
+    <a href="#main" class="skip-link">본문 바로가기</a>
     <div class="aurora" aria-hidden="true">
       <b class="b1"></b>
       <b class="b2"></b>
       <b class="b3"></b>
     </div>
-    <nav class="topbar">
+    <nav class="topbar" aria-label="주요">
       <div class="topbar-inner">
         <a href={base} class="brand">
           <span class="brand-mark"><TrendingUp size={17} stroke-width={2.5} /></span>
@@ -58,7 +63,7 @@ const base = raw.endsWith("/") ? raw : raw + "/";
       </div>
     </nav>
 
-    <main class="container">
+    <main id="main" class="container">
       <slot />
     </main>
 
