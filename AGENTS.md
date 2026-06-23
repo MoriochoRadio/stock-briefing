@@ -1,25 +1,24 @@
-# 프로젝트 가이드 (Codex용)
+# 프로젝트 가이드 (에이전트용)
 
-매일 07:00 KST에 GitHub Actions가 미국·한국 증시 브리핑을 생성해 GitHub Pages로 배포하는 프로젝트.
+> **단일 소스: [`CLAUDE.md`](./CLAUDE.md)** — 상세 구조·규칙은 그쪽을 정본으로 따른다. 아래는 요약.
+
+GitHub Actions가 하루 4회(🌅07:00 밤사이 미국장 + 한국장 🟢09:10 개장·🟡12:30 장중·🔴15:40 마감) **반도체 중심** 증시 분석을 생성해 GitHub Pages로 배포. 마감엔 한국 심층 리포트 + 미국 반도체 연결 분석.
 라이브: https://moriochoradio.github.io/stock-briefing/
 
-## 구조
+## 핵심 구조 (상세는 CLAUDE.md)
 
-- `scripts/fetch_data.py` — yfinance 시세 + Google News RSS 수집 → `data.json`, 히스토리를 `site/src/data/history.json`에 누적
-- `scripts/generate.py` — LLM(Gemini 무료 티어, 폴백 Anthropic)으로 브리핑 작성 → `briefings/YYYY-MM-DD.md`
-- `site/` — Astro 5 + Tailwind 4 + lightweight-charts + Lucide. 정적 빌드 → GitHub Pages
-- `.github/workflows/daily.yml` — cron 22:00 UTC, 봇이 briefings/history를 커밋 후 사이트 빌드·배포
+- `scripts/fetch_data.py` — 시세·뉴스·공포탐욕 수집 → `site/src/data/*.json`
+- `scripts/generate.py` — 모닝 브리핑 LLM(`run_llm()` 공유, 재시도·폴백) → `briefings/*.md`
+- `scripts/intraday_kr.py` — 한국장 개장/장중/마감 + 미국 반도체 분석 → `intraday.json` (폴백 시 기존 실제 분석 보존)
+- `scripts/ta.py` — 공유 기술적 지표 (`deep_report.py`도 import)
+- `site/` — Astro 5. `Hero`(시점 반응형) · `IntradayTimeline` · `StockCharts` · `UsSemiReport`
+- `.github/workflows/` — `daily.yml`(모닝) · `intraday_kr.yml`(한국장 3회)
 
 ## 반드시 지킬 규칙
 
-1. **push 전에 항상 `git pull --rebase origin main`** — Actions 봇이 매일 원격에 커밋하므로 그냥 push하면 거부됨. 충돌 시 `briefings/`와 `site/src/data/history.json`은 원격(봇) 버전 우선.
-2. **base 경로 유지** — `astro.config.mjs`의 `BASE_PATH`/`SITE_URL` 환경변수 구조와 내부 링크의 base 처리(`import.meta.env.BASE_URL` + 트레일링 슬래시 보정)를 깨뜨리지 말 것.
-3. **완전 무료 운영** — 유료 API·서버 필요한 기능 추가 금지. 정적 빌드(GitHub Pages) 유지.
-4. **검증 후 커밋** — 사이트 변경 시 `cd site && npm install && npm run build` 통과 확인.
-5. 시세 카드·차트는 `history.json`이 2일 이상 쌓여야 표시됨 — 데이터 없다고 버그 아님.
-
-## 자주 하는 작업
-
-- 관심종목/뉴스 키워드 변경: `config.yaml`
-- 브리핑 톤·구성: `scripts/generate.py`의 `PROMPT_TEMPLATE`
-- 실행 시간: `daily.yml` cron (UTC = KST−9h)
+1. **push 전 `git pull --rebase origin main`** (봇이 매일·장중 커밋). 충돌 시 `briefings/`·`site/src/data/*.json`은 원격 우선.
+2. **base 경로 유지** — `astro.config.mjs`의 `BASE_PATH`/`SITE_URL` 구조와 내부 링크 base 처리.
+3. **저비용 운영** — 기본 Gemini 무료 티어, 실행·호스팅 무료. 새 유료 서버·DB 금지. (Claude Opus 4.8은 `config.yaml` `provider: anthropic` 옵션, 유료.)
+4. **검증 후 커밋** — `cd site && npm run build` / 스크립트는 `python -m py_compile`.
+5. **워크플로 파일 push엔 `workflow` 스코프** 필요 (`gh auth refresh -s workflow`).
+6. **LLM 견고성 유지** — `run_llm()` 재시도·폴백, 인트라데이 다운그레이드 방지 안전장치를 깨지 말 것.
