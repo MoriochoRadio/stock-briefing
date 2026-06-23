@@ -29,14 +29,14 @@ const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filt
           </span>
         </div>
       </div>
-      <span class="us-note"><TriangleAlert size={12} /> 대략 분석 · 한국장과의 연결고리 중심</span>
+      <span class="us-note"><TriangleAlert size={12} aria-hidden="true" /> 대략 분석 · 한국장과의 연결고리 중심</span>
     </header>
 
     <div class="us-cards">
       {stocks.map((s: any) => (
         <div class="us-card">
           <div class="uc-row1">
-            <span class="uc-name"><Cpu size={13} /> {s.name}</span>
+            <span class="uc-name"><Cpu size={13} aria-hidden="true" /> {s.name}</span>
             <span class={`uc-price ${tone(s.change_pct)}`}>{usd(s.close)} <b>{pct(s.change_pct)}</b></span>
           </div>
           <div class="uc-chips">
@@ -67,7 +67,7 @@ const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filt
   .us-sub b.up { color: var(--up); } .us-sub b.down { color: var(--down); }
   .us-note {
     display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem;
-    color: color-mix(in srgb, var(--sub) 80%, transparent);
+    color: var(--sub);
     border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px;
   }
 
@@ -92,5 +92,5 @@ const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filt
   .us-read { font-size: 0.9rem; line-height: 1.72; color: var(--text); }
   .us-read p { margin: 0 0 8px; }
   .us-read p:last-child { margin-bottom: 0; }
-  .us-engine { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: color-mix(in srgb, var(--sub) 70%, transparent); }
+  .us-engine { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: var(--sub); }
 </style>

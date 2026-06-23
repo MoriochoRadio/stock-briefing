@@ -58,7 +58,7 @@ const krw = (n: number) => Math.round(n).toLocaleString("ko-KR");
       {charts.map((c) => (
         <section class="card sc-card" data-reveal>
           <header class="sc-head">
-            <span class="sc-name"><CandlestickChart size={14} /> {c.name}</span>
+            <span class="sc-name"><CandlestickChart size={14} aria-hidden="true" /> {c.name}</span>
             <span class={`sc-price ${tone(c.change)}`}>{krw(c.last)} <b>{fmtPct(c.change)}</b></span>
           </header>
           <div class="sc-legend">

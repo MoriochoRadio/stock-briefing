@@ -14,10 +14,11 @@ const WD = ["일", "월", "화", "수", "목", "금", "토"];
 let dateText = asOf;
 let weekday = "";
 if (asOf) {
-  const d = new Date(asOf + "T00:00:00");
+  // asOf는 KST 달력 날짜 라벨 — 빌드 머신 TZ에 흔들리지 않게 UTC 기준으로 파싱(요일 off-by-one 방지)
+  const d = new Date(asOf + "T00:00:00Z");
   if (!Number.isNaN(d.getTime())) {
-    weekday = WD[d.getDay()];
-    dateText = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    weekday = WD[d.getUTCDay()];
+    dateText = `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
   }
 }
 
@@ -93,7 +94,7 @@ const idx = wantIdx
     {idx.length > 0 && (
       <div class="constellation" data-reveal>
         {idx.map((ix, i) => (
-          <span class={`star ${ix.tone}`} style={`--x:${16 + i * (68 / Math.max(1, idx.length - 1))}%; --h:${ix.h}%; --d:${i * 120}ms`}>
+          <span class={`star ${ix.tone}`} style={`--x:${idx.length === 1 ? 50 : 16 + i * (68 / (idx.length - 1))}%; --h:${ix.h}%; --d:${i * 120}ms`}>
             <i class="dot"></i>
             <b class="lab">{ix.short}</b>
             <b class="chg">{fmtPct(ix.change)}</b>
@@ -287,7 +288,7 @@ const idx = wantIdx
   .kr-tick i.up { color: var(--up); }
   .kr-tick i.down { color: var(--down); }
   .kr-tick i.flat { color: var(--sub); }
-  .hero-kr-as { margin: 8px 0 0; font-size: 0.74rem; color: color-mix(in srgb, var(--sub) 80%, transparent); }
+  .hero-kr-as { margin: 8px 0 0; font-size: 0.74rem; color: var(--sub); }
 
   @media (prefers-reduced-motion: reduce) {
     .sun { animation: none; bottom: calc(var(--sun, 12) * 1%); opacity: 1; transition: none; }

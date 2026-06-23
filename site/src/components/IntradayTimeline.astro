@@ -36,7 +36,7 @@ const delayed = snaps.some((s) => s.delayed);
           <span class="id-sub">{data.date} · {data.updated_kst?.slice(11)} 기준{market && <> · 코스피 <b class={tone(market.kospi?.change_pct)}>{pct(market.kospi?.change_pct)}</b> · 원/달러 {krw(market.krw?.close)}</>}</span>
         </div>
       </div>
-      <span class="id-flag-note"><TriangleAlert size={12} /> 지연 시세(약 15~20분){delayed && " · 휴장/지연 포함"}</span>
+      <span class="id-flag-note"><TriangleAlert size={12} aria-hidden="true" /> 지연 시세(약 15~20분){delayed && " · 휴장/지연 포함"}</span>
     </header>
 
     <ol class="timeline">
@@ -44,7 +44,7 @@ const delayed = snaps.some((s) => s.delayed);
         const Icon = PHASE_ICON[s.phase] ?? Clock;
         return (
           <li class={`tl-item ${PHASE_TONE[s.phase] ?? ""}`}>
-            <div class="tl-marker"><Icon size={15} /></div>
+            <div class="tl-marker"><Icon size={15} aria-hidden="true" /></div>
             <div class="tl-body card">
               <div class="tl-top">
                 <span class="tl-label">{s.label}</span>
@@ -100,7 +100,7 @@ const delayed = snaps.some((s) => s.delayed);
   .id-sub b.up, .id-sub b.down { font-weight: 700; }
   .id-flag-note {
     display: inline-flex; align-items: center; gap: 5px;
-    font-size: 0.72rem; color: color-mix(in srgb, var(--sub) 80%, transparent);
+    font-size: 0.72rem; color: var(--sub);
     border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px;
   }
 
@@ -160,7 +160,6 @@ const delayed = snaps.some((s) => s.delayed);
   .read p:last-child { margin-bottom: 0; }
   .read .rhead { font-weight: 700; color: var(--accent); margin-top: 12px; }
   .read .rhead:first-child { margin-top: 0; }
-  .read.close { white-space: normal; }
 
-  .tl-engine { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: color-mix(in srgb, var(--sub) 70%, transparent); }
+  .tl-engine { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: var(--sub); }
 </style>
