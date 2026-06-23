@@ -1,0 +1,141 @@
+---
+// 삼성전자·SK하이닉스 인터랙티브 차트 — 가격 + 이동평균(SMA20/60/120) 오버레이.
+// 데이터: series.json(종목별 1년 일봉). lightweight-charts로 렌더(테마 연동).
+import seriesData from "../data/series.json";
+import { CandlestickChart } from "@lucide/astro";
+
+const TARGETS = [
+  { ticker: "005930.KS", name: "삼성전자" },
+  { ticker: "000660.KS", name: "SK하이닉스" },
+];
+const WINDOW = 180; // 최근 ~9개월
+const all = seriesData as Record<string, [string, number][]>;
+
+function pricePts(arr: [string, number][]) {
+  return arr.map((p) => ({ time: p[0], value: p[1] }));
+}
+function smaPts(arr: [string, number][], period: number) {
+  const out: { time: string; value: number }[] = [];
+  for (let i = period - 1; i < arr.length; i++) {
+    let s = 0;
+    for (let j = i - period + 1; j <= i; j++) s += arr[j][1];
+    out.push({ time: arr[i][0], value: +(s / period).toFixed(2) });
+  }
+  return out;
+}
+const tail = <T,>(a: T[]) => a.slice(-WINDOW);
+
+const charts = TARGETS.map(({ ticker, name }) => {
+  const arr = all[ticker];
+  if (!arr || arr.length < 30) return null;
+  const last = arr[arr.length - 1];
+  const prev = arr[arr.length - 2];
+  const change = prev ? +(((last[1] / prev[1]) - 1) * 100).toFixed(2) : 0;
+  return {
+    id: `sc-${ticker.replace(/\W/g, "")}`,
+    name, ticker, last: last[1], change, asof: last[0],
+    series: [
+      { name: "종가", color: "var(--text)", data: tail(pricePts(arr)), width: 2 },
+      { name: "SMA20", color: "#e0a13a", data: tail(smaPts(arr, 20)), width: 1 },
+      { name: "SMA60", color: "#3a82e0", data: tail(smaPts(arr, 60)), width: 1 },
+      { name: "SMA120", color: "#9a5ae0", data: tail(smaPts(arr, 120)), width: 1 },
+    ],
+  };
+}).filter(Boolean) as any[];
+
+const show = charts.length > 0;
+// lightweight-charts는 CSS 변수 색을 못 읽으므로, 종가선 색은 클라이언트에서 테마값으로 치환
+const payload = JSON.stringify(charts.map((c) => ({ id: c.id, series: c.series })));
+const fmtPct = (p: number) => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(2) + "%";
+const tone = (p: number) => (p > 0 ? "up" : p < 0 ? "down" : "flat");
+const krw = (n: number) => Math.round(n).toLocaleString("ko-KR");
+---
+
+{show && (
+  <section class="charts-wrap" id="charts">
+    <div class="eyebrow"><span class="tag">CHART</span> 반도체 양대 추이 (가격·이동평균) <span class="line"></span></div>
+    <div class="charts-grid">
+      {charts.map((c) => (
+        <section class="card sc-card" data-reveal>
+          <header class="sc-head">
+            <span class="sc-name"><CandlestickChart size={14} /> {c.name}</span>
+            <span class={`sc-price ${tone(c.change)}`}>{krw(c.last)} <b>{fmtPct(c.change)}</b></span>
+          </header>
+          <div class="sc-legend">
+            <span><i style="background:var(--text)"></i>종가</span>
+            <span><i style="background:#e0a13a"></i>20일</span>
+            <span><i style="background:#3a82e0"></i>60일</span>
+            <span><i style="background:#9a5ae0"></i>120일</span>
+          </div>
+          <div class="sc-chart" id={c.id} data-asof={c.asof}></div>
+        </section>
+      ))}
+    </div>
+    <script type="application/json" id="stock-charts-data" set:html={payload} />
+  </section>
+)}
+
+<script>
+  import { createChart, LineSeries } from "lightweight-charts";
+
+  function colors() {
+    const css = getComputedStyle(document.documentElement);
+    return {
+      text: css.getPropertyValue("--sub").trim(),
+      grid: css.getPropertyValue("--border").trim(),
+      price: css.getPropertyValue("--text").trim(),
+    };
+  }
+
+  function init() {
+    const dataEl = document.getElementById("stock-charts-data");
+    if (!dataEl) return;
+    const charts = JSON.parse(dataEl.textContent ?? "[]");
+    const c = colors();
+    const made: any[] = [];
+
+    for (const cfg of charts) {
+      const el = document.getElementById(cfg.id);
+      if (!el) continue;
+      const chart = createChart(el, {
+        autoSize: true,
+        layout: { background: { color: "transparent" }, textColor: c.text, fontFamily: '"Pretendard Variable", Pretendard, sans-serif' },
+        grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+        rightPriceScale: { borderVisible: false },
+        timeScale: { borderVisible: false },
+        crosshair: { horzLine: { labelBackgroundColor: "#888" }, vertLine: { labelBackgroundColor: "#888" } },
+        localization: { priceFormatter: (v: number) => Math.round(v).toLocaleString("ko-KR") },
+      });
+      for (const s of cfg.series) {
+        const color = s.color === "var(--text)" ? c.price : s.color;
+        const line = chart.addSeries(LineSeries, { color, lineWidth: s.width ?? 1, priceLineVisible: false, lastValueVisible: false });
+        line.setData(s.data);
+      }
+      chart.timeScale().fitContent();
+      made.push(chart);
+    }
+
+    window.addEventListener("themechange", () => {
+      const n = colors();
+      for (const ch of made) ch.applyOptions({ layout: { textColor: n.text }, grid: { vertLines: { color: n.grid }, horzLines: { color: n.grid } } });
+    });
+  }
+  init();
+</script>
+
+<style>
+  .charts-wrap { margin: 6px 0 8px; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .charts-grid { grid-template-columns: 1fr; } }
+  .sc-card { padding: 14px 16px; }
+  .sc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+  .sc-name { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.94rem; }
+  .sc-price { font-family: var(--font-num); font-size: 0.86rem; font-variant-numeric: tabular-nums; color: var(--sub); }
+  .sc-price b { font-weight: 700; }
+  .sc-price.up, .sc-price.up b { color: var(--up); }
+  .sc-price.down, .sc-price.down b { color: var(--down); }
+  .sc-legend { display: flex; flex-wrap: wrap; gap: 11px; margin-bottom: 8px; }
+  .sc-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--sub); font-weight: 600; }
+  .sc-legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .sc-chart { position: relative; height: 240px; }
+</style>

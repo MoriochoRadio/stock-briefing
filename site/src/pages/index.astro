@@ -4,6 +4,7 @@ import Base from "../layouts/Base.astro";
 import Hero from "../components/Hero.astro";
 import MarketMood from "../components/MarketMood.astro";
 import IntradayTimeline from "../components/IntradayTimeline.astro";
+import StockCharts from "../components/StockCharts.astro";
 import UsSemiReport from "../components/UsSemiReport.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
@@ -27,6 +28,8 @@ if (latest) ({ Content } = await render(latest));
   <MarketMood />
 
   <IntradayTimeline />
+
+  <StockCharts />
 
   <UsSemiReport />
 
