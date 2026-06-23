@@ -62,10 +62,16 @@ news_queries:
 news_per_query: 5   # 쿼리당 헤드라인 수
 
 llm:
-  # provider 우선순위: 환경변수에 GEMINI_API_KEY 있으면 gemini, ANTHROPIC_API_KEY 있으면 anthropic
+  # provider: 사용할 엔진 우선순위. "gemini"면 GEMINI_API_KEY(무료 티어)를 먼저 사용.
+  #           "anthropic"이면 ANTHROPIC_API_KEY(유료, Claude MAX 구독과 무관한 별도 결제)를 먼저 사용.
+  #           키가 없으면 다른 엔진으로 폴백, 둘 다 없으면 데이터만으로 기본 브리핑.
+  provider: "gemini"
   gemini_model: "gemini-2.5-flash"
-  anthropic_model: "claude-sonnet-4-6"
-  max_output_tokens: 8192
+  # Gemini 추론(thinking) 토큰 예산. >0이면 분석 깊이↑(무료). thinking 토큰도 출력 한도를
+  # 소비하므로 max_output_tokens보다 충분히 작게. 0=추론 끔(기존 동작). -1=동적(모델 자동).
+  gemini_thinking_budget: 4096
+  anthropic_model: "claude-opus-4-8"   # provider를 "anthropic"으로 바꾸면 사용(유료, 월 ~$3~4)
+  max_output_tokens: 16000
 
 site:
   title: "📈 아침 시장 브리핑"

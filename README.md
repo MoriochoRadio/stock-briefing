@@ -4,11 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 매일 한국시간 오전 7시, 미국·한국 증시 맞춤 브리핑을 자동 생성해 대시보드 웹사이트로 배포합니다.
-**서버·비용 0원**: GitHub Actions(실행) + Gemini 무료 티어(분석) + GitHub Pages(호스팅).
+**서버·비용 0원**: GitHub Actions(실행) + Gemini 무료 티어(분석, thinking 켬) + GitHub Pages(호스팅). 더 깊은 분석이 필요하면 `config.yaml`에서 Claude Opus 4.8(유료, 월 ~$3~4)로 전환 가능.
 
 🔗 **라이브 데모**: https://moriochoradio.github.io/stock-briefing/
 
-**기술 스택**: Python(yfinance, Google News RSS) · Gemini API · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
+**기술 스택**: Python(yfinance, Google News RSS) · Gemini API(2.5 Flash, thinking) · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
 
 ## 주요 화면
 
@@ -21,7 +21,7 @@
 ```
 GitHub Actions (매일 07:00 KST)
  ├─ fetch_data.py : yfinance 시세 + Google News RSS 수집, 시세 히스토리 누적 (무료, 키 불필요)
- ├─ generate.py   : Gemini가 데이터를 브리핑으로 분석·작성 → briefings/날짜.md 커밋
+ ├─ generate.py   : Gemini 2.5 Flash(thinking 켬)가 시세·시장분위기·뉴스를 브리핑으로 분석·작성 → briefings/날짜.md 커밋
  ├─ Astro 빌드    : site/ → 메인(브리핑·헤드라인·시세·차트) + 대시보드(히트맵) + 아카이브
  └─ GitHub Pages 배포 → https://<아이디>.github.io/<레포명>/
 ```
@@ -43,10 +43,11 @@ GitHub Actions (매일 07:00 KST)
 
 3. **Gemini API 키 발급 (무료, 카드 불필요)** — https://aistudio.google.com/apikey
    ⚠️ 결제 등록하면 무료 티어가 사라지니 결제 등록하지 말 것.
+   > 더 깊은 분석을 원하면 대신 **Anthropic 키**(https://console.anthropic.com/, 유료·월 ~$3~4, **Claude MAX 구독과는 별도 결제**)를 발급하고 `config.yaml`의 `llm.provider`를 `"anthropic"`으로 바꾸면 됩니다.
 
 4. **키 등록** — 레포 → Settings → Secrets and variables → Actions → New repository secret
-   - Name: `GEMINI_API_KEY`, Value: 발급받은 키
-   - (선택) `ANTHROPIC_API_KEY` 등록 시 Claude로 작성 (Gemini 키 없을 때 사용)
+   - Name: `GEMINI_API_KEY`, Value: 발급받은 키 (기본 엔진: Gemini 2.5 Flash)
+   - (선택) `ANTHROPIC_API_KEY` 등록 + `config.yaml`의 `provider`를 `"anthropic"`으로 바꾸면 Claude Opus 4.8로 작성
 
 5. **Pages 켜기** — Settings → Pages → Source: **GitHub Actions** 선택.
 

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "chart-visualization": {
+      "source": "antvis/chart-visualization-skills",
+      "sourceType": "github",
+      "skillPath": "skills/chart-visualization/SKILL.md",
+      "computedHash": "23f0cd837bcef40b5d84e9f9e24de1f010fa2aa9bcc01ad3b5fd71d082f576c6"
+    },
+    "technical-analysis": {
+      "source": "omer-metin/skills-for-antigravity",
+      "sourceType": "github",
+      "skillPath": "skills/technical-analysis/SKILL.md",
+      "computedHash": "648e00fcf4b1da1689fa1df1bad5249c5f04625e6264475369d51a3a50a7eb0d"
+    },
+    "trading-analysis": {
+      "source": "gracefullight/stock-checker",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/trading-analysis/SKILL.md",
+      "computedHash": "16deb933c60d70e41a2d19431bb6865bb44214def192ecec873071fbd2fd8bd2"
+    }
+  }
+}

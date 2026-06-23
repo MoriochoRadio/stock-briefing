@@ -4,3 +4,7 @@ __pycache__/
 site/node_modules/
 site/dist/
 site/.astro/
+# 로컬 설치 스킬(절대경로 심볼릭링크 — CI에서 깨짐). lock 파일만 추적.
+.agents/
+.claude/
+reports/

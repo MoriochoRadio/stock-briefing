@@ -8,6 +8,9 @@ import history from "../data/history.json";
 const { date } = Astro.props as { date?: string };
 const asOf = date ?? sentiment.asOf ?? "";
 
+// 분석 엔진 표기 — config.yaml의 llm 설정과 일치시켜 유지. 독자에게 분석 주체를 투명하게 알린다.
+const ENGINE = "Gemini 2.5 Flash";
+
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 let dateText = asOf;
 let weekday = "";
@@ -72,7 +75,7 @@ const fmtPct = (p: number) => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).t
   </div>
 
   <div class="copy">
-    <p class="hero-eyebrow">오늘 아침의 시장</p>
+    <p class="hero-eyebrow">오늘 아침의 시장 <span class="hero-engine">AI 분석 · {ENGINE}</span></p>
     <h1 class="hero-date">{dateText} {weekday && <span class="hero-wd">{weekday}요일</span>}</h1>
     {all.length > 0 && (
       <p class="hero-sum">
@@ -208,12 +211,28 @@ const fmtPct = (p: number) => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).t
   .copy { padding: 20px 24px 22px; }
   .hero-eyebrow {
     margin: 0 0 9px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
     font-family: var(--font-num);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--accent);
+  }
+  /* 분석 엔진 칩 — 작고 절제된 표기 */
+  .hero-engine {
+    letter-spacing: 0.04em;
+    text-transform: none;
+    font-size: 0.64rem;
+    font-weight: 600;
+    color: var(--sub);
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
   }
   .hero-date {
     margin: 0;
