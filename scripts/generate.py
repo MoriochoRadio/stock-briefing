@@ -16,22 +16,25 @@ ROOT = Path(__file__).resolve().parent.parent
 _RETRY_CODES = {429, 500, 502, 503, 529}
 
 
-def _urlopen_json(req, timeout, tries=4):
-    """urlopen + JSON 파싱. 일시적 HTTP 오류/네트워크 오류는 지수 백오프로 재시도."""
+def _urlopen_json(req, timeout, tries=6):
+    """urlopen + JSON 파싱. 일시적 HTTP 오류/네트워크 오류는 지수 백오프로 재시도.
+    무료 LLM 엔드포인트의 일시 과부하(503) 창을 한 실행 안에서 넘기도록 넉넉히 재시도."""
     for i in range(tries):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code in _RETRY_CODES and i < tries - 1:
-                print(f"[warn] LLM HTTP {e.code} — 재시도 {i + 1}/{tries - 1}")
-                time.sleep(2 ** i)  # 1, 2, 4초
+                wait = min(2 ** (i + 1), 32)  # 2,4,8,16,32초 (총 ~60초)
+                print(f"[warn] LLM HTTP {e.code} — {wait}s 후 재시도 {i + 1}/{tries - 1}")
+                time.sleep(wait)
                 continue
             raise
         except urllib.error.URLError as e:
             if i < tries - 1:
-                print(f"[warn] LLM 네트워크 오류({e}) — 재시도 {i + 1}/{tries - 1}")
-                time.sleep(2 ** i)
+                wait = min(2 ** (i + 1), 32)
+                print(f"[warn] LLM 네트워크 오류({e}) — {wait}s 후 재시도 {i + 1}/{tries - 1}")
+                time.sleep(wait)
                 continue
             raise
 
