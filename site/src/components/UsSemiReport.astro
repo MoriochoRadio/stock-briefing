@@ -15,6 +15,8 @@ const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filt
 ---
 
 {us && stocks.length > 0 && (
+  <section class="ussemi-wrap">
+  <div class="eyebrow"><span class="tag">US</span> 미국 반도체 연결 <span class="line"></span></div>
   <section class="ussemi" data-reveal>
     <header class="us-head">
       <div class="us-title">
@@ -51,6 +53,7 @@ const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filt
       {paras(us.read).map((p) => <p>{p}</p>)}
     </div>
     {us.engine && us.engine !== "없음" && <span class="us-engine">분석: {us.engine}</span>}
+  </section>
   </section>
 )}
 
