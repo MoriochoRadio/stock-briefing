@@ -5,16 +5,17 @@
 산출: reports/ 에 JSON + 차트 PNG. 콘솔에 핵심 수치 출력.
 """
 import json
-import math
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import yfinance as yf
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ta import rsi, macd, atr, f  # noqa: E402  공유 지표(중복 제거)
 # 한글 라벨 깨짐(tofu) 방지 — Windows 기본 한글 폰트. 없으면 무시.
 for _f in ("Malgun Gothic", "AppleGothic", "NanumGothic"):
     try:
@@ -40,36 +41,6 @@ CONTEXT = [
 ]
 
 
-def rsi(close, n=14):
-    d = close.diff()
-    up = d.clip(lower=0).ewm(alpha=1 / n, adjust=False).mean()
-    dn = (-d.clip(upper=0)).ewm(alpha=1 / n, adjust=False).mean()
-    rs = up / dn.replace(0, np.nan)
-    return (100 - 100 / (1 + rs))
-
-
-def macd(close, fast=12, slow=26, sig=9):
-    ef = close.ewm(span=fast, adjust=False).mean()
-    es = close.ewm(span=slow, adjust=False).mean()
-    line = ef - es
-    signal = line.ewm(span=sig, adjust=False).mean()
-    return line, signal, line - signal
-
-
-def atr(h, l, c, n=14):
-    pc = c.shift(1)
-    tr = pd.concat([(h - l), (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
-    return tr.ewm(alpha=1 / n, adjust=False).mean()
-
-
-def f(x):
-    try:
-        v = float(x)
-        return v if math.isfinite(v) else None
-    except Exception:
-        return None
-
-
 def analyze(ticker, name):
     df = yf.Ticker(ticker).history(period="1y", auto_adjust=False)
     if len(df) < 60:
@@ -87,7 +58,7 @@ def analyze(ticker, name):
     a = atr(h, l, c)
     hi52, lo52 = c.tail(252).max(), c.tail(252).min()
     rng_pos = (last - lo52) / (hi52 - lo52) if hi52 > lo52 else None
-    vol_ann = c.pct_change().tail(20).std() * math.sqrt(252) * 100
+    vol_ann = c.pct_change().tail(20).std() * (252 ** 0.5) * 100
     vavg20 = v.tail(20).mean()
     # 최근 60거래일 스윙 고/저 → 지지/저항 구역
     win = df.tail(60)
