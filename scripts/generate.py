@@ -3,12 +3,37 @@
 """
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# 일시적 오류(과부하·레이트리밋)로 한 번에 실패하지 않도록 재시도하는 코드들.
+_RETRY_CODES = {429, 500, 502, 503, 529}
+
+
+def _urlopen_json(req, timeout, tries=4):
+    """urlopen + JSON 파싱. 일시적 HTTP 오류/네트워크 오류는 지수 백오프로 재시도."""
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code in _RETRY_CODES and i < tries - 1:
+                print(f"[warn] LLM HTTP {e.code} — 재시도 {i + 1}/{tries - 1}")
+                time.sleep(2 ** i)  # 1, 2, 4초
+                continue
+            raise
+        except urllib.error.URLError as e:
+            if i < tries - 1:
+                print(f"[warn] LLM 네트워크 오류({e}) — 재시도 {i + 1}/{tries - 1}")
+                time.sleep(2 ** i)
+                continue
+            raise
 
 PROMPT_TEMPLATE = """당신은 한국 개인투자자를 위한 아침 시장 브리핑을 쓰는 시니어 시장 분석가다. 규율 있는 거시·기술적 사고를 하되, 근거 없는 단정은 절대 하지 않는다. 아래 데이터와 뉴스 헤드라인만 근거로 한국어 브리핑을 마크다운으로 작성하라.
 
@@ -113,8 +138,7 @@ def call_gemini(prompt, cfg, key):
         url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
     )
     # 추론을 켜면 생성에 시간이 더 걸릴 수 있어 타임아웃을 늘린다.
-    with urllib.request.urlopen(req, timeout=240) as r:
-        res = json.load(r)
+    res = _urlopen_json(req, timeout=240)
     # 추론 응답은 본문이 여러 part로 나뉠 수 있으므로 thought가 아닌 text part만 모두 합친다.
     parts = res["candidates"][0]["content"].get("parts", [])
     texts = [p["text"] for p in parts if "text" in p and not p.get("thought")]
@@ -142,8 +166,7 @@ def call_anthropic(prompt, cfg, key):
         },
     )
     # thinking이 켜지면 응답 생성에 시간이 더 걸릴 수 있어 타임아웃을 늘린다.
-    with urllib.request.urlopen(req, timeout=300) as r:
-        res = json.load(r)
+    res = _urlopen_json(req, timeout=300)
     # adaptive thinking이 켜지면 content[0]가 thinking 블록일 수 있으므로
     # text 블록만 추려서 합친다 (content[0]["text"] 직접 접근은 깨질 수 있음).
     texts = [b.get("text", "") for b in res.get("content", []) if b.get("type") == "text"]
@@ -164,25 +187,27 @@ def fallback_briefing(data):
 
 
 def run_llm(prompt, cfg):
-    """설정된 provider 우선순위로 LLM을 호출해 (본문, 엔진명) 반환. 키가 없으면 (None, "없음").
+    """설정된 provider 우선순위로 LLM을 호출해 (본문, 엔진명) 반환.
+    한 엔진이 실패(재시도 후에도 오류)하면 다른 엔진으로 폴백하고, 모두 실패/무키면 (None, "없음").
+    예외를 삼켜 워크플로가 죽지 않게 한다(호출부는 None이면 데이터 요약으로 대체).
     인트라데이 등 다른 스크립트도 같은 엔진 설정을 공유하도록 분리."""
     gem, ant = os.environ.get("GEMINI_API_KEY"), os.environ.get("ANTHROPIC_API_KEY")
     provider = cfg["llm"].get("provider", "anthropic")
 
-    def _anthropic():
-        return call_anthropic(prompt, cfg, ant), f"Claude ({cfg['llm']['anthropic_model']})"
-
-    def _gemini():
-        return call_gemini(prompt, cfg, gem), f"Gemini ({cfg['llm']['gemini_model']})"
-
-    if provider == "anthropic" and ant:
-        return _anthropic()
-    if provider == "gemini" and gem:
-        return _gemini()
+    engines = []  # (이름, 키, 호출함수)
     if ant:
-        return _anthropic()
+        engines.append(("anthropic", ant, lambda: (call_anthropic(prompt, cfg, ant), f"Claude ({cfg['llm']['anthropic_model']})")))
     if gem:
-        return _gemini()
+        engines.append(("gemini", gem, lambda: (call_gemini(prompt, cfg, gem), f"Gemini ({cfg['llm']['gemini_model']})")))
+    # provider로 지정된 엔진을 맨 앞으로
+    engines.sort(key=lambda e: 0 if e[0] == provider else 1)
+
+    for name, _key, fn in engines:
+        try:
+            return fn()
+        except Exception as e:
+            print(f"[warn] {name} 호출 최종 실패({e}) — 다음 엔진/폴백으로")
+            continue
     return None, "없음"
 
 
