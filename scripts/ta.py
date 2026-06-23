@@ -60,7 +60,7 @@ def compute_metrics(df):
 
     # 추세 구조(이평 정/역배열)
     s20, s60, s120 = sma[20], sma[60], sma[120]
-    if all(f(x) for x in (s20, s60, s120)):
+    if all(f(x) is not None for x in (s20, s60, s120)):
         if last > s20 > s60 > s120:
             trend = "정배열"
         elif last < s20 < s60 < s120:

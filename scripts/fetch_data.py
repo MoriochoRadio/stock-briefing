@@ -65,6 +65,7 @@ def fetch_news(queries, per_query):
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 root = ET.fromstring(r.read())
+            count = 0  # 쿼리별 지역 카운터(기존 O(n²) 전체 재집계 대신)
             for it in root.iter("item"):
                 title = it.findtext("title") or ""
                 out.append({
@@ -73,7 +74,8 @@ def fetch_news(queries, per_query):
                     "link": it.findtext("link") or "",
                     "pub": it.findtext("pubDate") or "",
                 })
-                if sum(1 for n in out if n["query"] == q["q"]) >= per_query:
+                count += 1
+                if count >= per_query:
                     break
         except Exception as e:
             print(f"[warn] news '{q['q']}': {e}")

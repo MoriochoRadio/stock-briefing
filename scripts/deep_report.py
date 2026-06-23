@@ -87,7 +87,7 @@ def analyze(ticker, name):
     }
     # 추세 구조 판정(이평 정배열/역배열)
     s = [sma[20], sma[60], sma[120]]
-    if all(f(x) for x in s):
+    if all(f(x) is not None for x in s):
         if last > sma[20] > sma[60] > sma[120]:
             res["trend"] = "정배열(상승추세)"
         elif last < sma[20] < sma[60] < sma[120]:
