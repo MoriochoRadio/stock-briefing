@@ -9,7 +9,6 @@ import intraday from "../data/intraday.json";
 //  - 지평선 위 별 = 밤사이 미국장 + 한국 지수 등락
 const { date } = Astro.props as { date?: string };
 const asOf = date ?? sentiment.asOf ?? "";
-const ENGINE = "Gemini 2.5 Flash"; // 분석 엔진 — config.yaml llm 설정과 일치
 
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 let dateText = asOf;
@@ -45,6 +44,10 @@ const phase = phaseOf(nowKst.getUTCDay(), nowKst.getUTCHours());
 // ── 한국장 인트라데이 최신 스냅샷 → 히어로 상태 한 줄 ──
 const snaps: any[] = (intraday as any)?.snapshots ?? [];
 const latestSnap = snaps.length ? snaps[snaps.length - 1] : null;
+
+// 분석 엔진 라벨 — 최신 스냅샷의 engine에서 유도(provider 바뀌면 자동 반영). 없으면 기본값.
+const engineRaw = [...snaps.map((s) => s.engine), (intraday as any)?.us_semi?.engine].filter((e) => e && e !== "없음").pop();
+const ENGINE = /claude/i.test(engineRaw || "") ? "Claude Opus 4.8" : "Gemini 2.5 Flash";
 const idMarket = (intraday as any)?.market ?? null;
 const krStocks: any[] = latestSnap?.stocks ?? [];
 const fmtPct = (p: number) => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(2) + "%";
@@ -84,11 +87,11 @@ const idx = wantIdx
   .filter(Boolean);
 ---
 
-<header class={`hero-sky ${moodTone}`} data-phase={phase} data-reveal style={`--sun:${sunBase}`}>
+<header class={`hero-sky ${moodTone}`} data-phase={phase} style={`--sun:${sunBase}`}>
   <div class="stage" aria-hidden="true">
     <span class="sun"></span>
     {idx.length > 0 && (
-      <div class="constellation">
+      <div class="constellation" data-reveal>
         {idx.map((ix, i) => (
           <span class={`star ${ix.tone}`} style={`--x:${16 + i * (68 / Math.max(1, idx.length - 1))}%; --h:${ix.h}%; --d:${i * 120}ms`}>
             <i class="dot"></i>
@@ -100,6 +103,12 @@ const idx = wantIdx
     )}
     <span class="horizon-line"></span>
   </div>
+
+  {idx.length > 0 && (
+    <ul class="sr-only" aria-label="밤사이 주요 지수 등락">
+      {idx.map((ix) => (<li>{ix.short} {fmtPct(ix.change)}</li>))}
+    </ul>
+  )}
 
   <div class="copy">
     <p class="hero-eyebrow">
@@ -158,6 +167,10 @@ const idx = wantIdx
 </script>
 
 <style>
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   .hero-sky {
     position: relative;
     margin: 8px 0 10px;

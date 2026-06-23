@@ -25,6 +25,8 @@ const delayed = snaps.some((s) => s.delayed);
 ---
 
 {snaps.length > 0 && (
+  <section class="intraday-wrap" id="intraday">
+  <div class="eyebrow"><span class="tag">TODAY</span> 오늘 한국장 (장 시작·중간·종료) <span class="line"></span></div>
   <section class="intraday" data-reveal>
     <header class="id-head">
       <div class="id-title">
@@ -81,6 +83,7 @@ const delayed = snaps.some((s) => s.delayed);
         );
       })}
     </ol>
+  </section>
   </section>
 )}
 

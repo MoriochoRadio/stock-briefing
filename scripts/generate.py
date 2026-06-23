@@ -37,6 +37,8 @@ def _urlopen_json(req, timeout, tries=6):
                 time.sleep(wait)
                 continue
             raise
+    # 모든 재시도 소진(방어적): None을 반환해 호출부가 NoneType 첨자 오류로 죽지 않게 명시적 실패.
+    raise RuntimeError("LLM 요청 재시도 모두 소진")
 
 PROMPT_TEMPLATE = """당신은 한국 개인투자자를 위한 아침 시장 브리핑을 쓰는 시니어 시장 분석가다. 규율 있는 거시·기술적 사고를 하되, 근거 없는 단정은 절대 하지 않는다. 아래 데이터와 뉴스 헤드라인만 근거로 한국어 브리핑을 마크다운으로 작성하라.
 

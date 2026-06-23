@@ -41,6 +41,8 @@ def quote(ticker):
     try:
         df = yf.Ticker(ticker).history(period="5d", auto_adjust=False)
         c = df["Close"]
+        if len(c) < 2 or not c.iloc[-2]:  # 데이터 부족/전일 0 가드(IndexError·0나눗셈 방지)
+            return None
         return {"close": ta.f(c.iloc[-1]), "change_pct": ta.f((c.iloc[-1] / c.iloc[-2] - 1) * 100)}
     except Exception as e:
         print(f"[warn] quote {ticker}: {e}")
