@@ -218,14 +218,6 @@ def main():
         body, engine = fallback_text(phase, stocks, market), "없음"
     print(f"phase={phase} engine={engine} delayed={delayed}")
 
-    snap = {
-        "phase": phase, "label": PHASES[phase], "time": tnow,
-        "delayed": delayed, "engine": engine,
-        "stocks": stocks, "read": body.strip(),
-    }
-    if phase == "close":
-        snap["us_context"] = us_ctx
-
     path = ROOT / "site" / "src" / "data" / "intraday.json"
     cur = {}
     if path.exists():
@@ -235,6 +227,24 @@ def main():
             cur = {}
     if cur.get("date") != today:
         cur = {"date": today, "snapshots": []}
+
+    snap = {
+        "phase": phase, "label": PHASES[phase], "time": tnow,
+        "delayed": delayed, "engine": engine,
+        "stocks": stocks, "read": body.strip(),
+    }
+    if phase == "close":
+        snap["us_context"] = us_ctx
+
+    # 다운그레이드 방지: 이번 호출이 폴백(없음)인데 같은 단계의 기존 실제 분석이 있으면,
+    # 시세·지표만 갱신하고 분석문(read)은 기존 실제 분석을 유지한다(재실행이 실제→폴백으로 떨어지지 않게).
+    if engine == "없음":
+        prev = next((s for s in cur.get("snapshots", []) if s.get("phase") == phase and s.get("engine") not in (None, "없음")), None)
+        if prev:
+            snap["read"] = prev["read"]
+            snap["engine"] = prev["engine"]
+            print(f"[keep] {phase} 기존 실제 분석 유지(이번 LLM 폴백)")
+
     snaps = [s for s in cur.get("snapshots", []) if s.get("phase") != phase]
     snaps.append(snap)
     order = {"open": 0, "mid": 1, "close": 2}
@@ -245,6 +255,11 @@ def main():
     if phase == "close":
         us = build_us_semi(cfg, stocks)
         if us:
+            prev_us = cur.get("us_semi")
+            if us["engine"] == "없음" and prev_us and prev_us.get("engine") not in (None, "없음"):
+                us["read"] = prev_us["read"]
+                us["engine"] = prev_us["engine"]
+                print("[keep] us_semi 기존 실제 분석 유지(이번 LLM 폴백)")
             cur["us_semi"] = us
             print(f"us_semi engine={us['engine']} stocks={len(us['stocks'])}")
 
