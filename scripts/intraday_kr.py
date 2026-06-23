@@ -24,6 +24,18 @@ PRIMARY = [
     {"ticker": "000660.KS", "name": "SK하이닉스"},
 ]
 
+# 미국 반도체 — 한국장 마감(close) 때 직전 미국 세션 기준으로 대략 분석(연결고리)
+US_SEMI = [
+    {"ticker": "NVDA", "name": "엔비디아"},
+    {"ticker": "AMD", "name": "AMD"},
+    {"ticker": "MU", "name": "마이크론"},
+    {"ticker": "TSM", "name": "TSMC"},
+    {"ticker": "AVGO", "name": "브로드컴"},
+    {"ticker": "ASML", "name": "ASML"},
+]
+US_KEYS = ("ticker", "name", "close", "change_pct", "trend", "rsi14", "rsi_state",
+           "macd_dir", "vs_sma20_pct", "ret_20d", "ret_60d", "range_pos", "asof")
+
 
 def quote(ticker):
     try:
@@ -113,6 +125,55 @@ STOCK_KEYS = ("ticker", "name", "close", "change_pct", "vs_open_pct", "trend",
               "sma20", "sma60", "hi52", "lo52", "asof")
 
 
+def build_us_semi(cfg, kr_stocks):
+    """미국 반도체(직전 세션) 대략 분석 + 한국 반도체와의 연결고리. close 단계에서 호출."""
+    stocks = []
+    for item in US_SEMI:
+        try:
+            df = yf.Ticker(item["ticker"]).history(period="1y", auto_adjust=False)
+            m = ta.compute_metrics(df)
+            if not m:
+                continue
+            m.update(ticker=item["ticker"], name=item["name"])
+            stocks.append({k: m.get(k) for k in US_KEYS})
+        except Exception as e:
+            print(f"[warn] US {item['ticker']}: {e}")
+    if not stocks:
+        return None
+    sox = quote("^SOX")
+
+    def line(s):
+        return (f"- {s['name']}: ${s['close']:,.2f} ({s['change_pct']:+.2f}%), {s['trend']}, "
+                f"RSI {s['rsi14']:.0f}({s['rsi_state']}), MACD {s['macd_dir']}, "
+                f"20일선대비 {s['vs_sma20_pct']:+.1f}%, 20일 {s['ret_20d']:+.1f}%")
+    us_lines = "\n".join(line(s) for s in stocks)
+    sox_line = f"필라델피아 반도체지수(SOX) {sox['change_pct']:+.2f}%" if sox else "(SOX 없음)"
+    kr_line = ", ".join(f"{s['name']} {s['change_pct']:+.2f}%" for s in kr_stocks) if kr_stocks else "(없음)"
+
+    prompt = f"""당신은 미국 반도체 섹터를 한국 투자자 관점에서 짚어주는 분석가다. 아래 직전 미국 세션 종가·지표만 근거로, 한국어로 '대략적인' 분석을 2~3문단 작성하라(한국장처럼 종목별 깊은 분석은 불필요, 큰 그림 중심). 데이터에 없는 수치 금지, 투자 권유 금지.
+
+[미국 반도체 지표]
+{us_lines}
+[지수] {sox_line}
+[오늘 한국 반도체] {kr_line}
+
+[작성 지침]
+- 첫 문장에 미국 반도체 섹터의 전반 성격(위험선호/중립/위험회피)을 한 단어로.
+- 큰 그림: 엔비디아·SOX를 축으로 섹터 추세와 모멘텀을 요약.
+- 핵심: 오늘 한국 반도체(삼성·SK하이닉스)와의 '연결고리'를 분명히(동조/디커플링, HBM·메모리 수요, 내일 한국장 시사점).
+- 마크다운 표·제목 금지. 평이한 문단으로."""
+    body, engine = run_llm(prompt, cfg)
+    if not body:
+        avg = sum(s["change_pct"] for s in stocks) / len(stocks)
+        mood = "위험회피" if avg <= -1 else "위험선호" if avg >= 1 else "중립"
+        body = (f"미국 반도체 섹터 성격: {mood}(평균 {avg:+.2f}%). " + sox_line + ". "
+                + "; ".join(f"{s['name']} {s['change_pct']:+.2f}%({s['trend']})" for s in stocks)
+                + ". (LLM 미설정 — 데이터 요약만 표시)")
+        engine = "없음"
+    return {"asof": stocks[0].get("asof"), "sox": sox, "stocks": stocks,
+            "read": body.strip(), "engine": engine}
+
+
 def main():
     phase = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PHASE", "close")).strip().lower()
     if phase not in PHASES:
@@ -179,6 +240,13 @@ def main():
     order = {"open": 0, "mid": 1, "close": 2}
     snaps.sort(key=lambda s: order.get(s["phase"], 9))
     cur.update(date=today, updated_kst=f"{today} {tnow}", market=market, snapshots=snaps)
+
+    # 한국장 마감 시, 직전 미국 반도체 세션을 한국과 연결지어 대략 분석
+    if phase == "close":
+        us = build_us_semi(cfg, stocks)
+        if us:
+            cur["us_semi"] = us
+            print(f"us_semi engine={us['engine']} stocks={len(us['stocks'])}")
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cur, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")

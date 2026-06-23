@@ -1,0 +1,93 @@
+---
+// 미국 반도체 연결 분석 — 한국장 마감 시 직전 미국 세션 기준으로 대략 분석.
+// 데이터: scripts/intraday_kr.py(close 단계)가 intraday.json의 us_semi에 기록.
+import intraday from "../data/intraday.json";
+import { Cpu, TriangleAlert } from "@lucide/astro";
+
+const us = (intraday as any)?.us_semi ?? null;
+const stocks: any[] = us?.stocks ?? [];
+
+const usd = (n: any) => (typeof n === "number" ? "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
+const pct = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2) + "%" : "—");
+const pct1 = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%" : "—");
+const tone = (n: any) => (typeof n === "number" ? (n > 0 ? "up" : n < 0 ? "down" : "flat") : "flat");
+const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+---
+
+{us && stocks.length > 0 && (
+  <section class="ussemi" data-reveal>
+    <header class="us-head">
+      <div class="us-title">
+        <span class="us-flag" aria-hidden="true">🇺🇸</span>
+        <div>
+          <strong>미국 반도체 연결 분석</strong>
+          <span class="us-sub">
+            직전 미국 세션 {us.asof} 기준
+            {us.sox && <> · SOX <b class={tone(us.sox.change_pct)}>{pct(us.sox.change_pct)}</b></>}
+          </span>
+        </div>
+      </div>
+      <span class="us-note"><TriangleAlert size={12} /> 대략 분석 · 한국장과의 연결고리 중심</span>
+    </header>
+
+    <div class="us-cards">
+      {stocks.map((s: any) => (
+        <div class="us-card">
+          <div class="uc-row1">
+            <span class="uc-name"><Cpu size={13} /> {s.name}</span>
+            <span class={`uc-price ${tone(s.change_pct)}`}>{usd(s.close)} <b>{pct(s.change_pct)}</b></span>
+          </div>
+          <div class="uc-chips">
+            <span class="chip">{s.trend}</span>
+            <span class="chip">RSI {typeof s.rsi14 === "number" ? s.rsi14.toFixed(0) : "—"}</span>
+            <span class={`chip ${s.macd_dir === "상승" ? "up" : s.macd_dir === "하락" ? "down" : ""}`}>MACD {s.macd_dir}</span>
+            <span class="chip">20일 {pct1(s.ret_20d)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div class="us-read">
+      {paras(us.read).map((p) => <p>{p}</p>)}
+    </div>
+    {us.engine && us.engine !== "없음" && <span class="us-engine">분석: {us.engine}</span>}
+  </section>
+)}
+
+<style>
+  .ussemi { margin: 6px 0 8px; }
+  .us-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
+  .us-title { display: flex; align-items: center; gap: 11px; }
+  .us-flag { font-size: 1.4rem; line-height: 1; }
+  .us-title strong { display: block; font-size: 1.02rem; letter-spacing: -0.01em; }
+  .us-sub { font-size: 0.78rem; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .us-sub b.up { color: var(--up); } .us-sub b.down { color: var(--down); }
+  .us-note {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem;
+    color: color-mix(in srgb, var(--sub) 80%, transparent);
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px;
+  }
+
+  .us-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
+  @media (max-width: 640px) { .us-cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 380px) { .us-cards { grid-template-columns: 1fr; } }
+  .us-card {
+    border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px;
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+  }
+  .uc-row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 7px; }
+  .uc-name { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 0.86rem; }
+  .uc-price { font-family: var(--font-num); font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--sub); }
+  .uc-price b { font-weight: 700; }
+  .uc-price.up, .uc-price.up b { color: var(--up); }
+  .uc-price.down, .uc-price.down b { color: var(--down); }
+  .uc-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-size: 0.66rem; color: var(--sub); font-weight: 600; border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
+  .chip.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 35%, var(--border)); }
+  .chip.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 35%, var(--border)); }
+
+  .us-read { font-size: 0.9rem; line-height: 1.72; color: var(--text); }
+  .us-read p { margin: 0 0 8px; }
+  .us-read p:last-child { margin-bottom: 0; }
+  .us-engine { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: color-mix(in srgb, var(--sub) 70%, transparent); }
+</style>
