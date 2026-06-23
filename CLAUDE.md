@@ -6,9 +6,13 @@
 ## 구조
 
 - `scripts/fetch_data.py` — yfinance 시세 + Google News RSS 수집 → `data.json`, 히스토리를 `site/src/data/history.json`에 누적
-- `scripts/generate.py` — LLM(기본 Gemini 2.5 Flash + thinking, 옵션 Claude Opus 4.8)으로 브리핑 작성 → `briefings/YYYY-MM-DD.md`. 엔진 선택은 `config.yaml`의 `llm.provider`. 시세+시장분위기(공포탐욕·섹터)+뉴스를 프롬프트에 주입.
-- `site/` — Astro 5 + Tailwind 4 + lightweight-charts + Lucide. 정적 빌드 → GitHub Pages
-- `.github/workflows/daily.yml` — cron 22:00 UTC, 봇이 briefings/history를 커밋 후 사이트 빌드·배포
+- `scripts/generate.py` — 모닝 브리핑(밤사이 미국장). LLM(기본 Gemini 2.5 Flash + thinking, 옵션 Claude Opus 4.8) → `briefings/YYYY-MM-DD.md`. 엔진 선택은 `config.yaml`의 `llm.provider`. 엔진 호출은 `run_llm()`로 분리(인트라데이와 공유). 시세+시장분위기(공포탐욕·섹터)+뉴스 주입.
+- `scripts/intraday_kr.py` — **한국장 인트라데이**(개장/장중/마감) 점검. PHASE=open|mid|close. 삼성·SK하이닉스 지표 계산 + LLM 분석 → `site/src/data/intraday.json`(당일 타임라인 누적, 날짜 바뀌면 리셋). close는 풀 심층 리포트, open/mid는 가벼운 읽기. 시세는 yfinance(한국 ~15~20분 지연).
+- `scripts/ta.py` — 공유 기술적 지표(RSI·MACD·ATR·SMA·BB·추세판정). `compute_metrics(df)`.
+- `scripts/deep_report.py` — 로컬용 단발 심층 리포트(차트 PNG 포함, matplotlib). `reports/`는 gitignore.
+- `site/` — Astro 5 + Tailwind 4 + lightweight-charts + Lucide. 정적 빌드 → GitHub Pages. 메인의 `IntradayTimeline.astro`가 `intraday.json` 렌더.
+- `.github/workflows/daily.yml` — cron 22:00 UTC(07:00 KST), 모닝 브리핑.
+- `.github/workflows/intraday_kr.yml` — cron 00:10/03:30/06:40 UTC(09:10/12:30/15:40 KST, 평일), `github.event.schedule`로 PHASE 매핑. intraday.json 커밋 후 재배포. 둘 다 `pages` concurrency 공유.
 
 ## 반드시 지킬 규칙
 

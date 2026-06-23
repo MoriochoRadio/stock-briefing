@@ -207,19 +207,26 @@ def build_sentiment(cfg, data):
 
 
 def _news_category(query):
+    """반도체 집중 카테고리(분야) 매핑."""
     q = (query or "").lower()
     if "환율" in query or "krw" in q:
         return "환율"
-    if any(k in query for k in ["코스피", "삼성", "하이닉스"]):
-        return "국내증시"
-    if any(k in q for k in ["openai", "anthropic", "xai", "ipo"]):
-        return "AI·테크"
+    if any(k in query for k in ["삼성", "하이닉스"]):
+        return "국내반도체"
+    if "hbm" in q or "메모리" in query:
+        return "메모리·HBM"
+    if "수출" in query or "수급" in query:
+        return "수출·수급"
     if "nvidia" in q:
         return "엔비디아"
-    if "oracle" in q:
-        return "오라클"
-    if "tesla" in q:
-        return "테슬라"
+    if any(k in q for k in ["amd", "micron", "tsmc"]):
+        return "미국반도체"
+    if "asml" in q or "broadcom" in q:
+        return "장비·인프라"
+    if any(k in q for k in ["capex", "datacenter", "ai", "chip demand"]):
+        return "AI·수요"
+    if "반도체" in query or "semiconductor" in q:
+        return "반도체"
     if "증시" in query or "stock" in q or "market" in q:
         return "해외증시"
     return "마켓"

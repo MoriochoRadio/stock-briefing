@@ -1,0 +1,163 @@
+---
+// 오늘 한국장 인트라데이 타임라인 — 개장/장중/마감 스냅샷을 시간 순으로.
+// 데이터: scripts/intraday_kr.py 가 갱신하는 src/data/intraday.json
+import intraday from "../data/intraday.json";
+import { Sunrise, Clock, Sunset, TriangleAlert } from "@lucide/astro";
+
+type Stock = Record<string, number | string>;
+type Snap = {
+  phase: string; label: string; time: string; delayed?: boolean;
+  engine?: string; stocks: Stock[]; read: string; us_context?: { name: string; change_pct: number }[];
+};
+const data = intraday as any;
+const snaps: Snap[] = data?.snapshots ?? [];
+const market = data?.market ?? null;
+
+const PHASE_ICON: Record<string, any> = { open: Sunrise, mid: Clock, close: Sunset };
+const PHASE_TONE: Record<string, string> = { open: "open", mid: "mid", close: "close" };
+
+const krw = (n: any) => (typeof n === "number" ? Math.round(n).toLocaleString("ko-KR") : "—");
+const pct = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2) + "%" : "—");
+const pct1 = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%" : "—");
+const tone = (n: any) => (typeof n === "number" ? (n > 0 ? "up" : n < 0 ? "down" : "flat") : "flat");
+const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+const delayed = snaps.some((s) => s.delayed);
+---
+
+{snaps.length > 0 && (
+  <section class="intraday" data-reveal>
+    <header class="id-head">
+      <div class="id-title">
+        <span class="kr-flag" aria-hidden="true">🇰🇷</span>
+        <div>
+          <strong>오늘 한국장 타임라인</strong>
+          <span class="id-sub">{data.date} · {data.updated_kst?.slice(11)} 기준{market && <> · 코스피 <b class={tone(market.kospi?.change_pct)}>{pct(market.kospi?.change_pct)}</b> · 원/달러 {krw(market.krw?.close)}</>}</span>
+        </div>
+      </div>
+      <span class="id-flag-note"><TriangleAlert size={12} /> 지연 시세(약 15~20분){delayed && " · 휴장/지연 포함"}</span>
+    </header>
+
+    <ol class="timeline">
+      {snaps.map((s) => {
+        const Icon = PHASE_ICON[s.phase] ?? Clock;
+        return (
+          <li class={`tl-item ${PHASE_TONE[s.phase] ?? ""}`}>
+            <div class="tl-marker"><Icon size={15} /></div>
+            <div class="tl-body card">
+              <div class="tl-top">
+                <span class="tl-label">{s.label}</span>
+                <span class="tl-time">{s.time} KST</span>
+                {s.phase === "close" && <span class="tl-badge">심층</span>}
+              </div>
+
+              <div class="stocks">
+                {s.stocks.map((st: any) => (
+                  <div class="stock">
+                    <div class="st-row1">
+                      <span class="st-name">{st.name}</span>
+                      <span class={`st-price ${tone(st.change_pct)}`}>{krw(st.close)} <b>{pct(st.change_pct)}</b></span>
+                    </div>
+                    <div class="st-chips">
+                      <span class="chip">개장대비 <b class={tone(st.vs_open_pct)}>{pct1(st.vs_open_pct)}</b></span>
+                      <span class="chip">{st.trend}</span>
+                      <span class="chip">RSI {typeof st.rsi14 === "number" ? st.rsi14.toFixed(0) : "—"} · {st.rsi_state}</span>
+                      <span class={`chip ${st.macd_dir === "상승" ? "up" : st.macd_dir === "하락" ? "down" : ""}`}>MACD {st.macd_dir}</span>
+                      {s.phase === "close" && <span class="chip">60일 {pct1(st.ret_60d)}</span>}
+                      {s.phase === "close" && <span class="chip">52주 {typeof st.range_pos === "number" ? Math.round(st.range_pos * 100) : "—"}%</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div class={`read ${s.phase}`}>
+                {paras(s.read).map((p) => (
+                  <p class={p.startsWith("▶") ? "rhead" : ""}>{p}</p>
+                ))}
+              </div>
+
+              {s.engine && s.engine !== "없음" && <span class="tl-engine">분석: {s.engine}</span>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  </section>
+)}
+
+<style>
+  .intraday { margin: 6px 0 8px; }
+  .id-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+  }
+  .id-title { display: flex; align-items: center; gap: 11px; }
+  .kr-flag { font-size: 1.4rem; line-height: 1; }
+  .id-title strong { display: block; font-size: 1.02rem; letter-spacing: -0.01em; }
+  .id-sub { font-size: 0.78rem; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .id-sub b.up, .id-sub b.down { font-weight: 700; }
+  .id-flag-note {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.72rem; color: color-mix(in srgb, var(--sub) 80%, transparent);
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px;
+  }
+
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before {
+    content: ""; position: absolute; left: 15px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--border);
+  }
+  .tl-item { position: relative; padding-left: 44px; margin-bottom: 14px; }
+  .tl-marker {
+    position: absolute; left: 0; top: 2px; z-index: 1;
+    width: 32px; height: 32px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; background: var(--sub);
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+  .tl-item.open .tl-marker { background: linear-gradient(135deg, #f0a93a, #e0772a); }
+  .tl-item.mid .tl-marker { background: linear-gradient(135deg, #4f9ae0, #3a6fe0); }
+  .tl-item.close .tl-marker { background: linear-gradient(135deg, #e0475e, #c0273e); }
+
+  .tl-body { padding: 14px 16px; }
+  .tl-top { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+  .tl-label { font-weight: 700; font-size: 0.96rem; }
+  .tl-time { font-size: 0.76rem; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .tl-badge {
+    margin-left: auto; font-size: 0.66rem; font-weight: 700; color: #fff;
+    background: linear-gradient(135deg, #e0475e, #c0273e);
+    padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em;
+  }
+
+  .stocks { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 12px; }
+  @media (max-width: 540px) { .stocks { grid-template-columns: 1fr; } }
+  .stock {
+    border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px;
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+  }
+  .st-row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 7px; }
+  .st-name { font-weight: 700; font-size: 0.9rem; }
+  .st-price { font-family: var(--font-num); font-size: 0.86rem; font-variant-numeric: tabular-nums; color: var(--sub); }
+  .st-price b { font-weight: 700; }
+  .st-price.up, .st-price.up b { color: var(--up); }
+  .st-price.down, .st-price.down b { color: var(--down); }
+  .st-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    font-size: 0.68rem; color: var(--sub); font-weight: 600;
+    border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px;
+    font-variant-numeric: tabular-nums;
+  }
+  .chip b { font-weight: 700; }
+  .chip.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 35%, var(--border)); }
+  .chip.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 35%, var(--border)); }
+  .chip b.up { color: var(--up); }
+  .chip b.down { color: var(--down); }
+
+  .read { font-size: 0.9rem; line-height: 1.72; color: var(--text); }
+  .read p { margin: 0 0 8px; }
+  .read p:last-child { margin-bottom: 0; }
+  .read .rhead { font-weight: 700; color: var(--accent); margin-top: 12px; }
+  .read .rhead:first-child { margin-top: 0; }
+  .read.close { white-space: normal; }
+
+  .tl-engine { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: color-mix(in srgb, var(--sub) 70%, transparent); }
+</style>

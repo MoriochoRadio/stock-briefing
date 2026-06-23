@@ -3,6 +3,7 @@ import { getCollection, render } from "astro:content";
 import Base from "../layouts/Base.astro";
 import Hero from "../components/Hero.astro";
 import MarketMood from "../components/MarketMood.astro";
+import IntradayTimeline from "../components/IntradayTimeline.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
 import NewsHeadlines from "../components/NewsHeadlines.astro";
@@ -23,6 +24,9 @@ if (latest) ({ Content } = await render(latest));
   <Hero date={latest?.id} />
 
   <MarketMood />
+
+  <div class="eyebrow"><span class="tag">TODAY</span> 오늘 한국장 (장 시작·중간·종료) <span class="line"></span></div>
+  <IntradayTimeline />
 
   <div class="eyebrow"><span class="tag">QUOTES</span> 주요 시세 <span class="line"></span></div>
   <QuoteCards />

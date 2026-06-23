@@ -2,7 +2,7 @@
 # 이 파일만 수정하면 종목/포맷이 바뀝니다.
 
 profile:
-  style: "보유 종목 없는 공부/관망 단계. 대형주·IT/AI 섹터 중심. 용어 해설 필요."
+  style: "보유 종목 없는 공부/관망 단계. 반도체(메모리·HBM·파운드리·반도체장비) 섹터에 집중. 삼성전자·SK하이닉스가 핵심. 미국 반도체(엔비디아·AMD·마이크론·TSMC·ASML)와의 연결고리, 원/달러 환율, AI 투자(capex) 흐름을 함께 본다. 용어 해설 필요."
 
 indices:
   - { ticker: "^DJI",    name: "다우" }
@@ -11,14 +11,21 @@ indices:
   - { ticker: "^KS11",   name: "코스피" }
   - { ticker: "KRW=X",   name: "원/달러" }
 
+# 반도체 집중: 미국 반도체 핵심(설계·메모리·파운드리·장비)
 watchlist_us:
   - { ticker: "NVDA", name: "엔비디아" }
-  - { ticker: "ORCL", name: "오라클" }
-  - { ticker: "TSLA", name: "테슬라" }
+  - { ticker: "AMD",  name: "AMD" }
+  - { ticker: "MU",   name: "마이크론" }
+  - { ticker: "TSM",  name: "TSMC" }
+  - { ticker: "AVGO", name: "브로드컴" }
+  - { ticker: "ASML", name: "ASML" }
 
+# 반도체 집중: 한국 반도체(메모리 양대 + 장비·파운드리)
 watchlist_kr:
   - { ticker: "005930.KS", name: "삼성전자" }
   - { ticker: "000660.KS", name: "SK하이닉스" }
+  - { ticker: "042700.KS", name: "한미반도체" }
+  - { ticker: "000990.KS", name: "DB하이텍" }
 
 # 시장 분위기·분야별용 바스켓 (섹터 ETF = 시장 전체를 분야별로 대표).
 # 시세 카드에는 안 뜨고, 상단 '시장 분위기'의 한국/미국/총합 집계와 분야별 칩에만 쓰임.
@@ -49,15 +56,16 @@ breadth_kr:   # 한국 KODEX 섹터 ETF
   - { ticker: "117700.KS", name: "건설" }
   - { ticker: "140710.KS", name: "운송" }
 
-# 뉴스 검색 키워드 (Google News RSS)
+# 뉴스 검색 키워드 (Google News RSS) — 반도체 집중
 news_queries:
-  - { q: "미국 증시 마감",            lang: "ko" }
-  - { q: "코스피 삼성전자 SK하이닉스", lang: "ko" }
-  - { q: "Nvidia stock",             lang: "en" }
-  - { q: "Oracle stock",             lang: "en" }
-  - { q: "Tesla stock",              lang: "en" }
-  - { q: "OpenAI OR Anthropic OR xAI funding IPO", lang: "en" }
-  - { q: "원달러 환율",               lang: "ko" }
+  - { q: "삼성전자 SK하이닉스 반도체",   lang: "ko" }
+  - { q: "HBM 메모리 반도체 업황",       lang: "ko" }
+  - { q: "반도체 수출 외국인 수급",      lang: "ko" }
+  - { q: "Nvidia stock",                lang: "en" }
+  - { q: "AMD OR Micron OR TSMC stock", lang: "en" }
+  - { q: "ASML OR Broadcom semiconductor", lang: "en" }
+  - { q: "AI datacenter capex chip demand", lang: "en" }
+  - { q: "원달러 환율",                  lang: "ko" }
 
 news_per_query: 5   # 쿼리당 헤드라인 수
 

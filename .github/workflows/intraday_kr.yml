@@ -1,0 +1,82 @@
+name: Korea Intraday Snapshot
+
+on:
+  schedule:
+    - cron: "10 0 * * 1-5"   # 00:10 UTC = 09:10 KST 개장
+    - cron: "30 3 * * 1-5"   # 03:30 UTC = 12:30 KST 장중
+    - cron: "40 6 * * 1-5"   # 06:40 UTC = 15:40 KST 마감
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "점검 시점"
+        type: choice
+        default: close
+        options: [open, mid, close]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  intraday:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve phase (cron → open/mid/close)
+        run: |
+          case "${{ github.event.schedule }}" in
+            "10 0 * * 1-5") echo "PHASE=open"  >> "$GITHUB_ENV" ;;
+            "30 3 * * 1-5") echo "PHASE=mid"   >> "$GITHUB_ENV" ;;
+            "40 6 * * 1-5") echo "PHASE=close" >> "$GITHUB_ENV" ;;
+            *) echo "PHASE=${{ github.event.inputs.phase || 'close' }}" >> "$GITHUB_ENV" ;;
+          esac
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Korea intraday snapshot
+        env:
+          PYTHONIOENCODING: "utf-8"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/intraday_kr.py "$PHASE"
+
+      - name: Commit intraday snapshot
+        run: |
+          git config user.name "briefing-bot"
+          git config user.email "actions@github.com"
+          git add site/src/data/intraday.json
+          git diff --cached --quiet || git commit -m "intraday($PHASE): $(date -u -d '+9 hours' +'%Y-%m-%d %H:%M') KST"
+          git pull --rebase origin main
+          git push
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Build Astro site
+        env:
+          BASE_PATH: "/${{ github.event.repository.name }}"
+          SITE_URL: "https://${{ github.repository_owner }}.github.io"
+        run: |
+          cd site
+          npm install
+          npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

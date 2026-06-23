@@ -163,31 +163,37 @@ def fallback_briefing(data):
     return "\n".join(lines)
 
 
+def run_llm(prompt, cfg):
+    """설정된 provider 우선순위로 LLM을 호출해 (본문, 엔진명) 반환. 키가 없으면 (None, "없음").
+    인트라데이 등 다른 스크립트도 같은 엔진 설정을 공유하도록 분리."""
+    gem, ant = os.environ.get("GEMINI_API_KEY"), os.environ.get("ANTHROPIC_API_KEY")
+    provider = cfg["llm"].get("provider", "anthropic")
+
+    def _anthropic():
+        return call_anthropic(prompt, cfg, ant), f"Claude ({cfg['llm']['anthropic_model']})"
+
+    def _gemini():
+        return call_gemini(prompt, cfg, gem), f"Gemini ({cfg['llm']['gemini_model']})"
+
+    if provider == "anthropic" and ant:
+        return _anthropic()
+    if provider == "gemini" and gem:
+        return _gemini()
+    if ant:
+        return _anthropic()
+    if gem:
+        return _gemini()
+    return None, "없음"
+
+
 def main():
     cfg = yaml.safe_load(load(ROOT / "config.yaml"))
     data = json.loads(load(ROOT / "data.json"))
     prompt = build_prompt(data, cfg)
 
-    gem, ant = os.environ.get("GEMINI_API_KEY"), os.environ.get("ANTHROPIC_API_KEY")
-    provider = cfg["llm"].get("provider", "anthropic")
-
-    def run_anthropic():
-        return call_anthropic(prompt, cfg, ant), f"Claude ({cfg['llm']['anthropic_model']})"
-
-    def run_gemini():
-        return call_gemini(prompt, cfg, gem), f"Gemini ({cfg['llm']['gemini_model']})"
-
-    # 설정된 provider를 우선 사용하고, 키가 없으면 다른 엔진으로 폴백한다.
-    if provider == "anthropic" and ant:
-        body, engine = run_anthropic()
-    elif provider == "gemini" and gem:
-        body, engine = run_gemini()
-    elif ant:
-        body, engine = run_anthropic()
-    elif gem:
-        body, engine = run_gemini()
-    else:
-        body, engine = fallback_briefing(data), "없음"
+    body, engine = run_llm(prompt, cfg)
+    if body is None:
+        body = fallback_briefing(data)
     print(f"engine: {engine}")
 
     date = data["date_kst"]
