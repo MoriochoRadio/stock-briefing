@@ -49,9 +49,12 @@ jobs:
           git config user.email "actions@github.com"
           git add briefings site/src/data/history.json site/src/data/series.json site/src/data/sentiment.json site/src/data/news.json
           git diff --cached --quiet || git commit -m "briefing: $(date -u -d '+9 hours' +'%Y-%m-%d')"
-          # 원격에 다른 커밋이 있을 수 있으니 rebase 후 push (push 거부 방지)
-          git pull --rebase origin main
-          git push
+          # 원격에 다른 커밋(봇/다른 워크플로)이 있을 수 있으니 rebase 후 push.
+          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도(silent 데이터 손실 방지).
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && break
+            echo "push 충돌/실패 — 재시도 $i/5"; sleep 6
+          done
 
       - uses: actions/setup-node@v5
         with:

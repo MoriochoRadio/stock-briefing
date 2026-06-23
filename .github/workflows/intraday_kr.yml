@@ -57,8 +57,11 @@ jobs:
           git config user.email "actions@github.com"
           git add site/src/data/intraday.json
           git diff --cached --quiet || git commit -m "intraday($PHASE): $(date -u -d '+9 hours' +'%Y-%m-%d %H:%M') KST"
-          git pull --rebase origin main
-          git push
+          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도(silent 데이터 손실 방지).
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && break
+            echo "push 충돌/실패 — 재시도 $i/5"; sleep 6
+          done
 
       - uses: actions/setup-node@v5
         with:
