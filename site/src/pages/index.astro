@@ -11,9 +11,8 @@ import MarketChart from "../components/MarketChart.astro";
 import NewsHeadlines from "../components/NewsHeadlines.astro";
 import BriefingArticle from "../components/BriefingArticle.astro";
 import { ChevronRight } from "@lucide/astro";
+import { base } from "../lib/base";
 
-const raw = import.meta.env.BASE_URL;
-const base = raw.endsWith("/") ? raw : raw + "/";
 const all = (await getCollection("briefings")).sort((a, b) => b.id.localeCompare(a.id));
 const latest = all[0];
 const recent = all.slice(1, 6);
@@ -48,7 +47,10 @@ if (latest) ({ Content } = await render(latest));
       <Content />
     </BriefingArticle>
   ) : (
-    <p>아직 브리핑이 없습니다. 첫 워크플로 실행 후 생성됩니다.</p>
+    <div class="card empty">
+      <p><strong>아직 브리핑이 없습니다.</strong></p>
+      <p class="empty-sub">첫 워크플로 실행 후 아침 브리핑과 시세 카드가 여기에 채워집니다.</p>
+    </div>
   )}
 
   {recent.length > 0 && (
@@ -102,4 +104,7 @@ if (latest) ({ Content } = await render(latest));
     font-weight: 600;
   }
   .more:hover { text-decoration: underline; }
+  .empty { padding: 26px 22px; }
+  .empty p { margin: 0 0 4px; }
+  .empty-sub { color: var(--sub); font-size: 0.88rem; }
 </style>

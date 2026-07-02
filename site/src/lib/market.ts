@@ -15,7 +15,8 @@ export function summarize(items: { change_pct: number }[]) {
   return { count: items.length, ups, downs, avg, upPct, downPct: 100 - upPct, tone, label };
 }
 
-export const avgText = (v: number) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+// 유니코드 마이너스(−)로 통일 — 사이트 전체 등락 표기와 글리프 폭을 맞춘다.
+export const avgText = (v: number) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "%";
 export const toneOf = (v: number) => (v > 0 ? "up" : v < 0 ? "down" : "flat");
 
 // 히트맵 타일 색: 등락 강도(|%|, 4%에서 최대)로 채도. 한국식 빨강=상승.
@@ -54,9 +55,18 @@ export function range52(series: [string, number][] | undefined) {
   return { lo, hi, cur, pos };
 }
 
-export function fmtNum(n: number) {
+// 표시 소수 자릿수: 원본 값의 소수부 길이(최대 2)
+export function decimalsOf(n: number) {
   const s = String(n);
   const i = s.indexOf(".");
-  const d = i < 0 ? 0 : Math.min(2, s.length - i - 1);
+  return i < 0 ? 0 : Math.min(2, s.length - i - 1);
+}
+
+export function fmtNum(n: number) {
+  const d = decimalsOf(n);
   return n.toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
+
+// LLM 분석문 → 문단 배열 (빈 줄 기준, IntradayTimeline·UsSemiReport 공유)
+export const paras = (text: string | undefined) =>
+  (text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);

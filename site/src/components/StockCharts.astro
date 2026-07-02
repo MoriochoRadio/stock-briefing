@@ -8,7 +8,7 @@ const TARGETS = [
   { ticker: "005930.KS", name: "삼성전자" },
   { ticker: "000660.KS", name: "SK하이닉스" },
 ];
-const WINDOW = 180; // 최근 ~9개월
+const WINDOW = 260; // 1년치 전체 — 기간 버튼(1M~1Y)으로 클라이언트에서 줌
 const all = seriesData as Record<string, [string, number][]>;
 
 function pricePts(arr: [string, number][]) {
@@ -61,11 +61,18 @@ const krw = (n: number) => Math.round(n).toLocaleString("ko-KR");
             <span class="sc-name"><CandlestickChart size={14} aria-hidden="true" /> {c.name}</span>
             <span class={`sc-price ${tone(c.change)}`}>{krw(c.last)} <b>{fmtPct(c.change)}</b></span>
           </header>
-          <div class="sc-legend">
-            <span><i style="background:var(--text)"></i>종가</span>
-            <span><i style="background:#e0a13a"></i>20일</span>
-            <span><i style="background:#3a82e0"></i>60일</span>
-            <span><i style="background:#9a5ae0"></i>120일</span>
+          <div class="sc-tools">
+            <div class="sc-legend">
+              <span><i style="background:var(--text)"></i>종가</span>
+              <span><i style="background:#e0a13a"></i>20일</span>
+              <span><i style="background:#3a82e0"></i>60일</span>
+              <span><i style="background:#9a5ae0"></i>120일</span>
+            </div>
+            <div class="sc-ranges" role="group" aria-label="차트 기간">
+              {["1M", "3M", "6M", "1Y"].map((r) => (
+                <button type="button" class:list={["rg", { active: r === "6M" }]} data-range={r} data-chart={c.id}>{r}</button>
+              ))}
+            </div>
           </div>
           <div class="sc-chart" id={c.id} data-asof={c.asof}></div>
         </section>
@@ -111,7 +118,30 @@ const krw = (n: number) => Math.round(n).toLocaleString("ko-KR");
         const line = chart.addSeries(LineSeries, { color, lineWidth: s.width ?? 1, priceLineVisible: false, lastValueVisible: false });
         line.setData(s.data);
       }
-      chart.timeScale().fitContent();
+
+      // 기간 버튼(1M/3M/6M/1Y): 마지막 봉 기준 N개월 구간으로 줌
+      const price = cfg.series[0]?.data ?? [];
+      const lastTime = price.length ? price[price.length - 1].time : null;
+      const setRange = (months: number) => {
+        if (!lastTime) { chart.timeScale().fitContent(); return; }
+        const to = new Date(lastTime + "T00:00:00Z");
+        const from = new Date(to);
+        from.setUTCMonth(from.getUTCMonth() - months);
+        const fromStr = from.toISOString().slice(0, 10);
+        const first = price[0]?.time;
+        chart.timeScale().setVisibleRange({
+          from: first && fromStr < first ? first : fromStr,
+          to: lastTime,
+        } as any);
+      };
+      setRange(6);
+      document.querySelectorAll<HTMLButtonElement>(`[data-chart="${cfg.id}"]`).forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const months = { "1M": 1, "3M": 3, "6M": 6, "1Y": 12 }[btn.dataset.range ?? "6M"] ?? 6;
+          setRange(months);
+          document.querySelectorAll(`[data-chart="${cfg.id}"]`).forEach((b) => b.classList.toggle("active", b === btn));
+        });
+      });
       made.push(chart);
     }
 
@@ -134,8 +164,18 @@ const krw = (n: number) => Math.round(n).toLocaleString("ko-KR");
   .sc-price b { font-weight: 700; }
   .sc-price.up, .sc-price.up b { color: var(--up); }
   .sc-price.down, .sc-price.down b { color: var(--down); }
-  .sc-legend { display: flex; flex-wrap: wrap; gap: 11px; margin-bottom: 8px; }
+  .sc-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .sc-legend { display: flex; flex-wrap: wrap; gap: 11px; }
   .sc-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--sub); font-weight: 600; }
   .sc-legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .sc-ranges { display: inline-flex; gap: 3px; }
+  .rg {
+    padding: 3px 8px; border: 1px solid var(--border); border-radius: 7px;
+    background: none; color: var(--sub); font-size: 0.7rem; font-weight: 700;
+    cursor: pointer; font-variant-numeric: tabular-nums;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+  }
+  .rg:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .rg.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--card-hover); }
   .sc-chart { position: relative; height: 240px; }
 </style>

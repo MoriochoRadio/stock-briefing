@@ -2,39 +2,78 @@
 import { getCollection, render } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import BriefingArticle from "../../components/BriefingArticle.astro";
-import { ArrowLeft } from "@lucide/astro";
+import { base } from "../../lib/base";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "@lucide/astro";
 
 export async function getStaticPaths() {
-  const all = await getCollection("briefings");
-  return all.map((b) => ({ params: { id: b.id }, props: { entry: b } }));
+  const all = (await getCollection("briefings")).sort((a, b) => a.id.localeCompare(b.id));
+  return all.map((b, i) => ({
+    params: { id: b.id },
+    props: {
+      entry: b,
+      prevId: i > 0 ? all[i - 1].id : null,
+      nextId: i < all.length - 1 ? all[i + 1].id : null,
+    },
+  }));
 }
 
-const { entry } = Astro.props;
+const { entry, prevId, nextId } = Astro.props;
 const { Content } = await render(entry);
-const raw = import.meta.env.BASE_URL;
-const base = raw.endsWith("/") ? raw : raw + "/";
 ---
 
-<Base title={`아침 시장 브리핑 — ${entry.id}`}>
-  <div class="eyebrow"><span class="tag">BRIEFING</span> {entry.id} <span class="line"></span></div>
+<Base title={`아침 시장 브리핑 — ${entry.id}`} description={`${entry.id} 미국·한국 증시 아침 브리핑`}>
+  <div class="eyebrow"><span class="tag">BRIEFING</span> <time datetime={entry.id}>{entry.id}</time> <span class="line"></span></div>
   <BriefingArticle>
     <Content />
   </BriefingArticle>
-  <p class="back">
-    <a href={base}><ArrowLeft size={15} /> 최신 브리핑으로</a>
-  </p>
+
+  <nav class="pager" aria-label="브리핑 이동">
+    {prevId ? (
+      <a class="pg prev" href={`${base}briefings/${prevId}/`} rel="prev">
+        <ChevronLeft size={15} />
+        <span><small>이전</small>{prevId}</span>
+      </a>
+    ) : <span class="pg ghost" />}
+    <a class="pg home" href={base}><ArrowLeft size={14} /> 최신 브리핑</a>
+    {nextId ? (
+      <a class="pg next" href={`${base}briefings/${nextId}/`} rel="next">
+        <span><small>다음</small>{nextId}</span>
+        <ChevronRight size={15} />
+      </a>
+    ) : <span class="pg ghost" />}
+  </nav>
 </Base>
 
 <style>
-  .back { margin-top: 20px; }
-  .back a {
+  .pager {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 26px;
+  }
+  .pg {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    color: var(--accent);
+    gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--text);
     text-decoration: none;
-    font-size: 0.9rem;
     font-weight: 600;
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+    transition: border-color 0.15s, color 0.15s;
   }
-  .back a:hover { text-decoration: underline; }
+  .pg:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }
+  .pg span { display: inline-flex; flex-direction: column; line-height: 1.25; }
+  .pg small { color: var(--sub); font-size: 0.68rem; font-weight: 600; }
+  .pg.next { text-align: right; }
+  .pg.home { border: none; background: none; color: var(--accent); font-size: 0.85rem; }
+  .pg.ghost { visibility: hidden; padding: 0; border: none; }
+  @media (max-width: 520px) {
+    .pg.home { display: none; }
+  }
 </style>

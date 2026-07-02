@@ -2,6 +2,7 @@
 // 오늘 한국장 인트라데이 타임라인 — 개장/장중/마감 스냅샷을 시간 순으로.
 // 데이터: scripts/intraday_kr.py 가 갱신하는 src/data/intraday.json
 import intraday from "../data/intraday.json";
+import { paras } from "../lib/market";
 import { Sunrise, Clock, Sunset, TriangleAlert } from "@lucide/astro";
 
 type Stock = Record<string, number | string>;
@@ -20,7 +21,6 @@ const krw = (n: any) => (typeof n === "number" ? Math.round(n).toLocaleString("k
 const pct = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2) + "%" : "—");
 const pct1 = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%" : "—");
 const tone = (n: any) => (typeof n === "number" ? (n > 0 ? "up" : n < 0 ? "down" : "flat") : "flat");
-const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 const delayed = snaps.some((s) => s.delayed);
 ---
 
@@ -33,7 +33,7 @@ const delayed = snaps.some((s) => s.delayed);
         <span class="kr-flag" aria-hidden="true">🇰🇷</span>
         <div>
           <strong>오늘 한국장 타임라인</strong>
-          <span class="id-sub">{data.date} · {data.updated_kst?.slice(11)} 기준{market && <> · 코스피 <b class={tone(market.kospi?.change_pct)}>{pct(market.kospi?.change_pct)}</b> · 원/달러 {krw(market.krw?.close)}</>}</span>
+          <span class="id-sub"><time datetime={data.date}>{data.date}</time> · {data.updated_kst?.slice(11)} 기준{market && <> · 코스피 <b class={tone(market.kospi?.change_pct)}>{pct(market.kospi?.change_pct)}</b> · 원/달러 {krw(market.krw?.close)}</>} <b class="id-stale" data-date={data.date} hidden>지난 거래일</b></span>
         </div>
       </div>
       <span class="id-flag-note"><TriangleAlert size={12} aria-hidden="true" /> 지연 시세(약 15~20분){delayed && " · 휴장/지연 포함"}</span>
@@ -53,7 +53,7 @@ const delayed = snaps.some((s) => s.delayed);
               </div>
 
               <div class="stocks">
-                {s.stocks.map((st: any) => (
+                {(s.stocks ?? []).map((st: any) => (
                   <div class="stock">
                     <div class="st-row1">
                       <span class="st-name">{st.name}</span>
@@ -87,6 +87,15 @@ const delayed = snaps.some((s) => s.delayed);
   </section>
 )}
 
+<script>
+  // 스냅샷 날짜가 오늘(KST)이 아니면 '지난 거래일' 배지를 켠다 (주말·휴일 열람 시 오해 방지)
+  const el = document.querySelector<HTMLElement>(".id-stale");
+  if (el) {
+    const todayKst = new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10);
+    if (el.dataset.date && el.dataset.date !== todayKst) el.hidden = false;
+  }
+</script>
+
 <style>
   .intraday { margin: 6px 0 8px; }
   .id-head {
@@ -98,6 +107,11 @@ const delayed = snaps.some((s) => s.delayed);
   .id-title strong { display: block; font-size: 1.02rem; letter-spacing: -0.01em; }
   .id-sub { font-size: 0.78rem; color: var(--sub); font-variant-numeric: tabular-nums; }
   .id-sub b.up, .id-sub b.down { font-weight: 700; }
+  .id-stale {
+    display: inline-block; margin-left: 4px; padding: 1px 8px;
+    border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+    color: var(--down); border: 1px solid color-mix(in srgb, var(--down) 40%, var(--border));
+  }
   .id-flag-note {
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 0.72rem; color: var(--sub);

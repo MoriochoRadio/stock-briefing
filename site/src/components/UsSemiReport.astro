@@ -2,6 +2,7 @@
 // 미국 반도체 연결 분석 — 한국장 마감 시 직전 미국 세션 기준으로 대략 분석.
 // 데이터: scripts/intraday_kr.py(close 단계)가 intraday.json의 us_semi에 기록.
 import intraday from "../data/intraday.json";
+import { paras } from "../lib/market";
 import { Cpu, TriangleAlert } from "@lucide/astro";
 
 const us = (intraday as any)?.us_semi ?? null;
@@ -11,7 +12,6 @@ const usd = (n: any) => (typeof n === "number" ? "$" + n.toLocaleString("en-US",
 const pct = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2) + "%" : "—");
 const pct1 = (n: any) => (typeof n === "number" ? (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%" : "—");
 const tone = (n: any) => (typeof n === "number" ? (n > 0 ? "up" : n < 0 ? "down" : "flat") : "flat");
-const paras = (t: string) => (t || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 ---
 
 {us && stocks.length > 0 && (

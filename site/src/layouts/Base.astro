@@ -1,11 +1,13 @@
 ---
 import "../styles/global.css";
 import ChartModal from "../components/ChartModal.astro";
+import { base } from "../lib/base";
 import { TrendingUp, Archive, LayoutGrid, Sun, Moon } from "@lucide/astro";
 
 const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
-const raw = import.meta.env.BASE_URL;
-const base = raw.endsWith("/") ? raw : raw + "/";
+const path = Astro.url.pathname;
+const isActive = (seg: string) => path.startsWith(base + seg);
+const canonical = Astro.site ? new URL(path, Astro.site).href : null;
 ---
 
 <!DOCTYPE html>
@@ -15,15 +17,27 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <title>{title}</title>
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta property="og:site_name" content="아침 시장 브리핑" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="alternate" type="application/rss+xml" title="아침 시장 브리핑" href={`${base}rss.xml`} />
     <link rel="icon" href={`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>`} />
-    <!-- 저장된 테마를 첫 페인트 전에 적용 (FOUC 방지) + JS 활성 표시 -->
+    <!-- 저장된 테마(없으면 OS 설정)를 첫 페인트 전에 적용 (FOUC 방지) + JS 활성 표시 -->
     <script is:inline>
       (function () {
         // .js 클래스가 있을 때만 reveal 요소를 숨긴다 → JS 비활성 시 콘텐츠 항상 표시
         document.documentElement.classList.add("js");
         try {
           var t = localStorage.getItem("theme");
-          if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          document.documentElement.dataset.theme = t;
         } catch (e) {}
       })();
     </script>
@@ -37,25 +51,31 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     <a href="#main" class="skip-link">본문 바로가기</a>
     <div class="aurora" aria-hidden="true">
       <b class="b1"></b>
-      <b class="b2"></b>
-      <b class="b3"></b>
     </div>
-    <nav class="topbar" aria-label="주요">
+    <nav class="topbar" aria-label="주요 메뉴">
       <div class="topbar-inner">
         <a href={base} class="brand">
           <span class="brand-mark"><TrendingUp size={17} stroke-width={2.5} /></span>
           아침 시장 브리핑
         </a>
         <div class="topbar-right">
-          <a href={`${base}dashboard/`} class="nav-link">
+          <a
+            href={`${base}dashboard/`}
+            class:list={["nav-link", { active: isActive("dashboard") }]}
+            aria-current={isActive("dashboard") ? "page" : undefined}
+          >
             <LayoutGrid size={15} />
             <span class="nav-label">대시보드</span>
           </a>
-          <a href={`${base}archive/`} class="nav-link">
+          <a
+            href={`${base}archive/`}
+            class:list={["nav-link", { active: isActive("archive") || isActive("briefings") }]}
+            aria-current={isActive("archive") ? "page" : undefined}
+          >
             <Archive size={15} />
             <span class="nav-label">아카이브</span>
           </a>
-          <button id="theme-toggle" type="button" aria-label="다크/라이트 모드 전환" title="다크/라이트 모드 전환">
+          <button id="theme-toggle" type="button" aria-label="라이트 모드 전환" aria-pressed="false" title="다크/라이트 모드 전환">
             <Sun size={16} class="icon-sun" />
             <Moon size={16} class="icon-moon" />
           </button>
@@ -74,7 +94,7 @@ const base = raw.endsWith("/") ? raw : raw + "/";
           아침 시장 브리핑
         </span>
         <p class="foot-meta">자동 생성 브리핑 · 투자 권유가 아닌 정보 제공입니다.</p>
-        <p class="foot-sub">매일 07:00 KST · GitHub Actions 갱신 · 데이터 Yahoo Finance · CNN</p>
+        <p class="foot-sub">평일 아침 브리핑 + 한국장 개장·장중·마감 스냅샷 · GitHub Actions 갱신 · 데이터 Yahoo Finance · CNN</p>
       </div>
     </footer>
 
@@ -84,11 +104,18 @@ const base = raw.endsWith("/") ? raw : raw + "/";
       (function () {
         var btn = document.getElementById("theme-toggle");
         if (!btn) return;
+        var sync = function () {
+          var light = document.documentElement.dataset.theme === "light";
+          btn.setAttribute("aria-pressed", String(light));
+          btn.setAttribute("aria-label", light ? "다크 모드 전환" : "라이트 모드 전환");
+        };
+        sync();
         btn.addEventListener("click", function () {
           var el = document.documentElement;
           var next = el.dataset.theme === "light" ? "dark" : "light";
           el.dataset.theme = next;
           try { localStorage.setItem("theme", next); } catch (e) {}
+          sync();
           window.dispatchEvent(new CustomEvent("themechange", { detail: next }));
         });
       })();
@@ -193,6 +220,7 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     transition: color 0.15s, background-color 0.15s;
   }
   .nav-link:hover { color: var(--accent); background: var(--card-hover); }
+  .nav-link.active { color: var(--accent); background: var(--card-hover); }
   @media (max-width: 460px) {
     .nav-link { padding: 7px 9px; }
     .nav-label { display: none; }
@@ -231,5 +259,5 @@ const base = raw.endsWith("/") ? raw : raw + "/";
     margin-bottom: 4px;
   }
   .foot-meta { margin: 0; color: var(--sub); font-size: 0.82rem; }
-  .foot-sub { margin: 0; color: color-mix(in srgb, var(--sub) 75%, transparent); font-size: 0.76rem; }
+  .foot-sub { margin: 0; color: var(--sub); font-size: 0.76rem; }
 </style>

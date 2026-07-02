@@ -3,6 +3,7 @@ import history from "../data/history.json";
 import sentiment from "../data/sentiment.json";
 import SectorHeatmap from "./SectorHeatmap.astro";
 import { kindOf } from "../lib/groups";
+import { summarize, avgText } from "../lib/market";
 import { Activity, TrendingUp, TrendingDown, Minus, Gauge } from "@lucide/astro";
 
 // 상단 '시장 분위기'.
@@ -18,19 +19,6 @@ const us = (sentiment.us ?? []).filter((q) => Number.isFinite(q.change_pct));
 const kr = (sentiment.kr ?? []).filter((q) => Number.isFinite(q.change_pct));
 const fng = sentiment.fng ?? null;
 
-function summarize(items) {
-  const ups = items.filter((q) => q.change_pct > 0).length;
-  const downs = items.filter((q) => q.change_pct < 0).length;
-  const avg = items.length ? items.reduce((s, q) => s + q.change_pct, 0) / items.length : 0;
-  const decided = ups + downs;
-  const upPct = decided ? Math.round((ups / decided) * 100) : 50;
-  let tone = "flat";
-  let label = "혼조";
-  if ((upPct >= 60 && avg > 0) || avg >= 0.4) { tone = "up"; label = "강세"; }
-  else if ((upPct <= 40 && avg < 0) || avg <= -0.4) { tone = "down"; label = "약세"; }
-  return { count: items.length, ups, downs, avg, upPct, downPct: 100 - upPct, tone, label };
-}
-const avgText = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
 const ToneIcon = (tone) => (tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : Minus);
 
 const groups = [

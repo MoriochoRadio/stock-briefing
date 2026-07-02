@@ -9,9 +9,7 @@ import { tvSymbol } from "../../lib/tv";
 import { kindOf } from "../../lib/groups";
 import { summarize, avgText, toneOf, sparkPath, range52, fmtNum } from "../../lib/market";
 import { Gauge, Activity, TrendingUp, TrendingDown, Minus, ArrowLeft, LineChart } from "@lucide/astro";
-
-const raw = import.meta.env.BASE_URL;
-const base = raw.endsWith("/") ? raw : raw + "/";
+import { base } from "../../lib/base";
 
 const latest = history.length ? history[history.length - 1] : null;
 const quotes = latest ? latest.quotes : [];
@@ -75,17 +73,19 @@ const tvAttr = (item) =>
       </section>
     )}
 
-    <section class="card bento-tile t-total" data-reveal data-glow>
-      <span class="tile-cap"><Activity size={14} /> 시장 총합</span>
-      {(() => { const Icon = ToneIcon(total.tone); return (
-        <div class={`total-label ${total.tone}`}><Icon size={20} /> {total.label}</div>
-      ); })()}
-      <div class="mood-bar">
-        <span class="seg up" style={`--w:${total.upPct}%`}></span>
-        <span class="seg down" style={`--w:${total.downPct}%`}></span>
-      </div>
-      <div class="tile-meta"><span class="up">{total.ups}↑</span> <span class="down">{total.downs}↓</span> · 평균 {avgText(total.avg)}</div>
-    </section>
+    {total.count > 0 && (
+      <section class="card bento-tile t-total" data-reveal data-glow>
+        <span class="tile-cap"><Activity size={14} /> 시장 총합</span>
+        {(() => { const Icon = ToneIcon(total.tone); return (
+          <div class={`total-label ${total.tone}`}><Icon size={20} /> {total.label}</div>
+        ); })()}
+        <div class="mood-bar">
+          <span class="seg up" style={`--w:${total.upPct}%`}></span>
+          <span class="seg down" style={`--w:${total.downPct}%`}></span>
+        </div>
+        <div class="tile-meta"><span class="up">{total.ups}↑</span> <span class="down">{total.downs}↓</span> · 평균 {avgText(total.avg)}</div>
+      </section>
+    )}
 
     <section class="card bento-tile t-idx" data-reveal>
       <span class="tile-cap">지수 스냅샷</span>

@@ -1,0 +1,56 @@
+---
+import Base from "../layouts/Base.astro";
+import { base } from "../lib/base";
+import { ArrowLeft } from "@lucide/astro";
+---
+
+<Base title="페이지를 찾을 수 없습니다 — 아침 시장 브리핑">
+  <div class="nf card">
+    <p class="code">404</p>
+    <h1>페이지를 찾을 수 없습니다</h1>
+    <p class="sub">주소가 바뀌었거나 아직 생성되지 않은 브리핑일 수 있습니다.</p>
+    <div class="links">
+      <a class="btn" href={base}><ArrowLeft size={15} /> 최신 브리핑으로</a>
+      <a class="btn ghost" href={`${base}archive/`}>아카이브 보기</a>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .nf {
+    margin-top: 40px;
+    padding: 48px 28px;
+    text-align: center;
+  }
+  .code {
+    margin: 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 3.4rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  h1 { margin: 6px 0 8px; font-size: 1.25rem; }
+  .sub { margin: 0 0 22px; color: var(--sub); font-size: 0.92rem; }
+  .links { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.88rem;
+  }
+  .btn.ghost {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+</style>

@@ -88,6 +88,17 @@ import { X } from "@lucide/astro";
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !modal.hidden) { close(); return; }
+      // 포커스 트랩: 모달이 열려 있는 동안 Tab이 배경으로 나가지 않게
+      if (e.key === "Tab" && !modal.hidden) {
+        var f = modal.querySelectorAll('button, [href], iframe, [tabindex]:not([tabindex="-1"])');
+        if (f.length) {
+          var first = f[0], last = f[f.length - 1];
+          if (!modal.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+          else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+        return;
+      }
       if (e.key === "Enter" || e.key === " ") {
         var trigger = e.target.closest ? e.target.closest("[data-tv]") : null;
         if (trigger) { e.preventDefault(); open(trigger.getAttribute("data-tv"), trigger.getAttribute("data-name") || ""); }

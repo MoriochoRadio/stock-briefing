@@ -2,6 +2,7 @@
 import history from "../data/history.json";
 import series from "../data/series.json";
 import { tvSymbol } from "../lib/tv";
+import { sparkPath, range52 as libRange52, decimalsOf, fmtNum as fmt, toneOf as cls } from "../lib/market";
 import { TrendingUp, TrendingDown, Minus, Clock, LineChart } from "@lucide/astro";
 
 const latest = history.length ? history[history.length - 1] : null;
@@ -22,46 +23,11 @@ const sparkPoints = (ticker) => {
 };
 
 // 52주(≈1년) 고/저 대비 현재가 위치 — Yahoo/Bloomberg 스타일 레인지 바
-const range52 = (ticker) => {
-  const s = allSeries[ticker];
-  if (!s || s.length < 10) return null;
-  const closes = s.map((p) => p[1]).filter((n) => Number.isFinite(n));
-  const lo = Math.min(...closes);
-  const hi = Math.max(...closes);
-  if (!(hi > lo)) return null;
-  const cur = closes[closes.length - 1];
-  const pos = Math.max(0, Math.min(100, ((cur - lo) / (hi - lo)) * 100));
-  return { lo, hi, pos };
-};
-
-// 표시 소수 자릿수: 원본 값의 소수부 길이(최대 2)
-const decimalsOf = (n) => {
-  const s = String(n);
-  const i = s.indexOf(".");
-  return i < 0 ? 0 : Math.min(2, s.length - i - 1);
-};
-const fmt = (n) => {
-  const d = decimalsOf(n);
-  return n.toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
-};
-const cls = (p) => (p > 0 ? "up" : p < 0 ? "down" : "flat");
+const range52 = (ticker) => libRange52(allSeries[ticker]);
 
 // 스파크라인 SVG 경로 (2일 이상 누적 시)
-const W = 120, H = 34, PAD = 3;
-function sparkline(points) {
-  if (!points || points.length < 2) return null;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-  const step = (W - PAD * 2) / (points.length - 1);
-  const xy = points.map((p, i) => [
-    +(PAD + i * step).toFixed(2),
-    +(H - PAD - ((p - min) / span) * (H - PAD * 2)).toFixed(2),
-  ]);
-  const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x},${y}`).join(" ");
-  const area = `${line} L${xy[xy.length - 1][0]},${H} L${xy[0][0]},${H} Z`;
-  return { line, area };
-}
+const W = 120, H = 34;
+const sparkline = (points) => sparkPath(points, W, H);
 ---
 
 {latest && (
@@ -82,7 +48,7 @@ function sparkline(points) {
             <div class="close" data-countup={q.close} data-decimals={decimalsOf(q.close)}>{fmt(q.close)}</div>
             <div class={`pill ${dir}`}>
               {q.change_pct > 0 ? <TrendingUp size={13} /> : q.change_pct < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
-              {q.change_pct > 0 ? "+" : q.change_pct < 0 ? "-" : ""}{Math.abs(q.change_pct).toFixed(2)}%
+              {q.change_pct > 0 ? "+" : q.change_pct < 0 ? "−" : ""}{Math.abs(q.change_pct).toFixed(2)}%
             </div>
             {r && (
               <div class="r52" title={`52주 범위 ${fmt(r.lo)} ~ ${fmt(r.hi)}`}>

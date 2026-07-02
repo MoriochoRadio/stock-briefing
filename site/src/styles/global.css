@@ -438,7 +438,6 @@ html:not([data-theme="light"]) .icon-moon { display: none; }
     transparent 66%);
   animation: dawn-breathe 14s ease-in-out infinite alternate;
 }
-.aurora .b2, .aurora .b3 { display: none; }  /* 단일 광원 */
 :root[data-theme="light"] .aurora b { opacity: 0.4; mix-blend-mode: multiply; }
 @keyframes dawn-breathe {
   from { opacity: 0.4; transform: translateX(-50%) translateY(0) scale(1); }

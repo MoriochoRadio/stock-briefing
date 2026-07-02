@@ -1,9 +1,8 @@
 ---
 import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
+import { base } from "../../lib/base";
 
-const raw = import.meta.env.BASE_URL;
-const base = raw.endsWith("/") ? raw : raw + "/";
 const all = (await getCollection("briefings")).sort((a, b) => b.id.localeCompare(a.id));
 
 // 월별 그룹핑
@@ -21,13 +20,20 @@ const months = Object.keys(byMonth).sort().reverse();
     <h1 class="hero-date">브리핑 아카이브</h1>
     <p class="hero-sum">지난 브리핑을 월별로 모았습니다. 총 {all.length}건.</p>
   </header>
-  {months.length === 0 && <p>아직 브리핑이 없습니다.</p>}
+  {months.length === 0 && (
+    <div class="card empty">
+      <p><strong>아직 브리핑이 없습니다.</strong></p>
+      <p class="empty-sub">첫 워크플로 실행 후 날짜별 브리핑이 여기에 쌓입니다.</p>
+    </div>
+  )}
   {months.map((m) => (
     <section>
       <div class="eyebrow"><span class="tag">{m}</span> <span class="line"></span></div>
       <div class="grid">
         {byMonth[m].map((b, i) => (
-          <a class="card card-lift day" data-reveal data-glow style={`--i:${i}`} href={`${base}briefings/${b.id}/`}>{b.id.slice(8)}일</a>
+          <a class="card card-lift day" data-reveal data-glow style={`--i:${i}`} href={`${base}briefings/${b.id}/`}>
+            <time datetime={b.id}>{b.id.slice(8)}일</time>
+          </a>
         ))}
       </div>
     </section>
@@ -49,4 +55,7 @@ const months = Object.keys(byMonth).sort().reverse();
     font-variant-numeric: tabular-nums;
   }
   .day:hover { color: var(--accent); }
+  .empty { padding: 26px 22px; }
+  .empty p { margin: 0 0 4px; }
+  .empty-sub { color: var(--sub); font-size: 0.88rem; }
 </style>
