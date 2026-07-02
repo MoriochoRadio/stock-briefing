@@ -1,6 +1,7 @@
 """시장 데이터 + 뉴스 헤드라인 수집 → data.json (LLM 불필요, 전부 무료 소스)"""
 import json
 import math
+import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -20,13 +21,30 @@ def load_config():
         return yaml.safe_load(f)
 
 
+def _hist(ticker, period="5d", tries=3):
+    """yfinance 일봉 조회 + 재시도 — 일시적 429/네트워크 오류로 카드·시리즈가 조용히
+    빠지는 것을 줄인다. auto_adjust=False로 통일(전 스크립트가 같은 '실제 체결가' 기준).
+    실패 시 None."""
+    for i in range(tries):
+        try:
+            df = yf.Ticker(ticker).history(period=period, auto_adjust=False)
+            if df is not None and len(df):
+                return df
+            print(f"[warn] {ticker}: 빈 응답 ({i + 1}/{tries})")
+        except Exception as e:
+            print(f"[warn] {ticker}: {e} ({i + 1}/{tries})")
+        if i < tries - 1:
+            time.sleep(2 * (i + 1))
+    return None
+
+
 def fetch_quotes(items):
     """최근 종가와 등락률. 실패하거나 값이 비정상(NaN)인 티커는 건너뜀."""
     out = []
     for item in items:
         try:
-            hist = yf.Ticker(item["ticker"]).history(period="5d")
-            if len(hist) < 2:
+            hist = _hist(item["ticker"])
+            if hist is None or len(hist) < 2:
                 continue
             last, prev = float(hist["Close"].iloc[-1]), float(hist["Close"].iloc[-2])
             # 휴장/빈 응답 시 yfinance가 마지막 종가를 NaN으로 주는 경우가 있다.
@@ -122,7 +140,9 @@ def build_series(cfg, period="1y"):
     for item in items:
         t = item["ticker"]
         try:
-            hist = yf.Ticker(t).history(period=period)
+            hist = _hist(t, period=period)
+            if hist is None:
+                continue
             arr = []
             for ts, close in hist["Close"].items():
                 c = float(close)
@@ -289,7 +309,7 @@ def main():
         "news": fetch_news(cfg["news_queries"], cfg.get("news_per_query", 5)),
     }
     out = ROOT / "data.json"
-    out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     if data["indices"] or data["watchlist_us"] or data["watchlist_kr"]:
         update_history(data)
     build_series(cfg)

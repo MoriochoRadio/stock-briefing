@@ -1,5 +1,7 @@
 """한국장 인트라데이 점검 — 개장/장중/마감 스냅샷 + LLM 분석 → site/src/data/intraday.json
-PHASE: open(09:10) | mid(12:30) | close(15:40). close는 풀 심층 리포트, open/mid는 가벼운 읽기.
+PHASE: auto(기본) | open | mid | close. close는 풀 심층 리포트, open/mid는 가벼운 읽기.
+auto는 실행 시점의 실제 KST 시각으로 phase를 판정한다 — GitHub cron이 수 시간 지연돼도
+'개장' 라벨에 오후 데이터가 들어가는 일이 없도록. 구간 밖/중복/휴장이면 스킵.
 엔진은 generate.run_llm 공유(Gemini 무료 우선). 키 없으면 데이터 기반 폴백 텍스트.
 시세는 yfinance(한국 주식 약 15~20분 지연)."""
 import json
@@ -9,15 +11,46 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import yaml
-import yfinance as yf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ta  # noqa: E402
+from fetch_data import _hist  # noqa: E402
 from generate import run_llm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 KST = timezone(timedelta(hours=9))
 PHASES = {"open": "개장", "mid": "장중", "close": "마감"}
+
+# phase별 캡처 허용 구간(KST). cron 발화가 지연돼도 '도착한 시각'으로 판정한다.
+# open은 시세 15~20분 지연을 감안해 09:30부터.
+WINDOWS = {
+    "open": ((9, 30), (11, 0)),
+    "mid": ((11, 30), (14, 0)),
+    "close": ((15, 35), (23, 30)),
+}
+
+
+def resolve_phase(now, cur):
+    """실행 시점 KST로 phase 판정. 구간 밖이거나 오늘 이미 실제 분석으로 캡처됐으면 None.
+    (기존 캡처가 LLM 폴백('없음')이었다면 같은 구간 내 재시도를 허용한다.)"""
+    hm = (now.hour, now.minute)
+    today = now.strftime("%Y-%m-%d")
+    for ph, (lo, hi) in WINDOWS.items():
+        if lo <= hm < hi:
+            if cur.get("date") == today:
+                prev = next((s for s in cur.get("snapshots", []) if s.get("phase") == ph), None)
+                if prev and prev.get("engine") not in (None, "없음"):
+                    return None
+            return ph
+    return None
+
+
+def _emit_output(captured, phase=""):
+    """GitHub Actions 후속 스텝(커밋·빌드·배포)이 스킵 여부를 알 수 있게 출력."""
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as fh:
+            fh.write(f"captured={'true' if captured else 'false'}\nphase={phase}\n")
 
 PRIMARY = [
     {"ticker": "005930.KS", "name": "삼성전자"},
@@ -39,7 +72,9 @@ US_KEYS = ("ticker", "name", "close", "change_pct", "trend", "rsi14", "rsi_state
 
 def quote(ticker):
     try:
-        df = yf.Ticker(ticker).history(period="5d", auto_adjust=False)
+        df = _hist(ticker, period="5d")
+        if df is None:
+            return None
         c = df["Close"]
         if len(c) < 2 or not c.iloc[-2]:  # 데이터 부족/전일 0 가드(IndexError·0나눗셈 방지)
             return None
@@ -47,6 +82,18 @@ def quote(ticker):
     except Exception as e:
         print(f"[warn] quote {ticker}: {e}")
         return None
+
+
+def market_line(market):
+    """코스피/환율 프롬프트용 한 줄. 한쪽만 성공해도 그쪽은 살려서 표기."""
+    if not market:
+        return "(없음)"
+    parts = []
+    if market.get("kospi"):
+        parts.append(f"코스피 {market['kospi']['change_pct']:+.2f}%")
+    if market.get("krw"):
+        parts.append(f"원/달러 {market['krw']['close']:,.1f}({market['krw']['change_pct']:+.2f}%)")
+    return ", ".join(parts) or "(없음)"
 
 
 def fmt_stock_for_prompt(s):
@@ -62,8 +109,7 @@ def fmt_stock_for_prompt(s):
 
 def light_prompt(label, tnow, stocks, market):
     lines = "\n".join(fmt_stock_for_prompt(s) for s in stocks)
-    mk = (f"코스피 {market['kospi']['change_pct']:+.2f}%, "
-          f"원/달러 {market['krw']['close']:,.1f}({market['krw']['change_pct']:+.2f}%)") if market else "(없음)"
+    mk = market_line(market)
     return f"""당신은 한국 증시 장중 스냅샷을 쓰는 분석가다. 아래 지연 시세(약 15~20분 지연)와 지표만 근거로, 오늘 한국 반도체(삼성전자·SK하이닉스) 흐름을 한국어 2~4문장으로 간결히 써라. 데이터에 없는 수치 금지, 투자 권유 금지.
 
 [시점] {label} 스냅샷 ({tnow} KST)
@@ -79,8 +125,7 @@ def light_prompt(label, tnow, stocks, market):
 
 def close_prompt(tnow, stocks, market, us_ctx):
     lines = "\n".join(fmt_stock_for_prompt(s) for s in stocks)
-    mk = (f"코스피 {market['kospi']['change_pct']:+.2f}%, "
-          f"원/달러 {market['krw']['close']:,.1f}({market['krw']['change_pct']:+.2f}%)") if market else "(없음)"
+    mk = market_line(market)
     us = ", ".join(f"{c['name']} {c['change_pct']:+.2f}%" for c in us_ctx) if us_ctx else "(없음)"
     return f"""당신은 한국 반도체 시장을 분석하는 시니어 시장 분석가다. 규율 있는 기술적 사고를 하되 근거 없는 단정은 하지 않는다. 오늘 한국장 마감 기준, 아래 지연 시세와 지표만 근거로 한국어 심층 리포트를 평이한 문단(마크다운 표·제목 금지)으로 작성하라.
 
@@ -115,8 +160,9 @@ def fallback_text(phase, stocks, market):
             f"{s['name']}: {s['close']:,} ({s['change_pct']:+.2f}%, 개장대비 {s['vs_open_pct']:+.2f}%), "
             f"{s['trend']}·RSI {s['rsi14']:.0f}({s['rsi_state']})·MACD {s['macd_dir']}."
         )
-    if market:
-        parts.append(f"코스피 {market['kospi']['change_pct']:+.2f}%, 원/달러 {market['krw']['close']:,.1f}.")
+    mk = market_line(market)
+    if mk != "(없음)":
+        parts.append(mk + ".")
     parts.append("(LLM 미설정 — 데이터 요약만 표시)")
     return "\n".join(parts)
 
@@ -132,8 +178,8 @@ def build_us_semi(cfg, kr_stocks):
     stocks = []
     for item in US_SEMI:
         try:
-            df = yf.Ticker(item["ticker"]).history(period="1y", auto_adjust=False)
-            m = ta.compute_metrics(df)
+            df = _hist(item["ticker"], period="1y")
+            m = ta.compute_metrics(df) if df is not None else None
             if not m:
                 continue
             m.update(ticker=item["ticker"], name=item["name"])
@@ -177,19 +223,35 @@ def build_us_semi(cfg, kr_stocks):
 
 
 def main():
-    phase = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PHASE", "close")).strip().lower()
-    if phase not in PHASES:
-        phase = "close"
+    arg = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PHASE", "auto")).strip().lower()
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     now = datetime.now(KST)
     today = now.strftime("%Y-%m-%d")
     tnow = now.strftime("%H:%M")
 
+    path = ROOT / "site" / "src" / "data" / "intraday.json"
+    cur = {}
+    if path.exists():
+        try:
+            cur = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            cur = {}
+
+    auto = arg not in PHASES  # "auto"(기본): 실행 시점 KST로 판정
+    if auto:
+        phase = resolve_phase(now, cur)
+        if not phase:
+            print(f"[skip] {tnow} KST — 캡처 구간 아님 또는 이미 캡처됨")
+            _emit_output(False)
+            return
+    else:
+        phase = arg
+
     stocks = []
     for item in PRIMARY:
         try:
-            df = yf.Ticker(item["ticker"]).history(period="1y", auto_adjust=False)
-            m = ta.compute_metrics(df)
+            df = _hist(item["ticker"], period="1y")
+            m = ta.compute_metrics(df) if df is not None else None
             if not m:
                 continue
             m.update(ticker=item["ticker"], name=item["name"])
@@ -197,19 +259,34 @@ def main():
         except Exception as e:
             print(f"[warn] {item['ticker']}: {e}")
     if not stocks:
-        print("[abort] 종목 데이터 없음"); return
+        print("[abort] 종목 데이터 없음")
+        _emit_output(False, phase)
+        return
 
     delayed = any(s.get("asof") != today for s in stocks)  # 휴장/지연이면 True
+    if auto and all(s.get("asof") != today for s in stocks):
+        # 오늘 봉 자체가 없음 = 휴장 추정 — 전일 데이터로 '오늘' 스냅샷을 쓰지 않는다.
+        print(f"[skip] 오늘 봉 없음(휴장 추정, 최신 {stocks[0].get('asof')}) — 스냅샷 생략")
+        _emit_output(False, phase)
+        return
 
     market = {"kospi": quote("^KS11"), "krw": quote("KRW=X")}
-    if not (market["kospi"] and market["krw"]):
+    if not (market["kospi"] or market["krw"]):
         market = None
-    us_ctx = []
+
+    # close: 미국 반도체 분석을 먼저 만들고, 그 결과에서 한국 프롬프트용 참고치(us_ctx)를
+    # 뽑아 쓴다(NVDA/^SOX/TSM 이중 fetch 제거).
+    us_ctx, us = [], None
     if phase == "close":
-        for t, n in [("NVDA", "엔비디아"), ("^SOX", "필라델피아 반도체"), ("TSM", "TSMC")]:
-            q = quote(t)
-            if q:
-                us_ctx.append({"name": n, "change_pct": q["change_pct"]})
+        us = build_us_semi(cfg, stocks)
+        if us:
+            by_ticker = {s["ticker"]: s for s in us["stocks"]}
+            if "NVDA" in by_ticker:
+                us_ctx.append({"name": "엔비디아", "change_pct": by_ticker["NVDA"]["change_pct"]})
+            if us.get("sox"):
+                us_ctx.append({"name": "필라델피아 반도체", "change_pct": us["sox"]["change_pct"]})
+            if "TSM" in by_ticker:
+                us_ctx.append({"name": "TSMC", "change_pct": by_ticker["TSM"]["change_pct"]})
 
     if phase == "close":
         prompt = close_prompt(tnow, stocks, market, us_ctx)
@@ -220,13 +297,6 @@ def main():
         body, engine = fallback_text(phase, stocks, market), "없음"
     print(f"phase={phase} engine={engine} delayed={delayed}")
 
-    path = ROOT / "site" / "src" / "data" / "intraday.json"
-    cur = {}
-    if path.exists():
-        try:
-            cur = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            cur = {}
     if cur.get("date") != today:
         cur = {"date": today, "snapshots": []}
 
@@ -254,20 +324,19 @@ def main():
     cur.update(date=today, updated_kst=f"{today} {tnow}", market=market, snapshots=snaps)
 
     # 한국장 마감 시, 직전 미국 반도체 세션을 한국과 연결지어 대략 분석
-    if phase == "close":
-        us = build_us_semi(cfg, stocks)
-        if us:
-            prev_us = cur.get("us_semi")
-            if us["engine"] == "없음" and prev_us and prev_us.get("engine") not in (None, "없음"):
-                us["read"] = prev_us["read"]
-                us["engine"] = prev_us["engine"]
-                print("[keep] us_semi 기존 실제 분석 유지(이번 LLM 폴백)")
-            cur["us_semi"] = us
-            print(f"us_semi engine={us['engine']} stocks={len(us['stocks'])}")
+    if phase == "close" and us:
+        prev_us = cur.get("us_semi")
+        if us["engine"] == "없음" and prev_us and prev_us.get("engine") not in (None, "없음"):
+            us["read"] = prev_us["read"]
+            us["engine"] = prev_us["engine"]
+            print("[keep] us_semi 기존 실제 분석 유지(이번 LLM 폴백)")
+        cur["us_semi"] = us
+        print(f"us_semi engine={us['engine']} stocks={len(us['stocks'])}")
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cur, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     print(f"saved {path} - {len(snaps)} snapshot(s)")
+    _emit_output(True, phase)
 
 
 if __name__ == "__main__":

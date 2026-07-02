@@ -2,7 +2,9 @@ name: Daily Stock Briefing
 
 on:
   schedule:
-    - cron: "0 22 * * *"   # 22:00 UTC = 한국시간 오전 7시
+    # 22:00 UTC 월~금 = 화~토 07:00 KST — 직전 밤 미국장 세션이 있는 날만.
+    # (일·월 아침은 미국 휴장으로 금요일 데이터를 '밤사이'처럼 쓰게 되어 제외)
+    - cron: "0 22 * * 1-5"
   workflow_dispatch:        # 수동 실행 버튼
   push:                     # main에 코드 push 시 사이트 재배포 (데이터 수집은 건너뜀)
     branches: [main]
@@ -26,6 +28,7 @@ jobs:
         if: github.event_name != 'push'
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install Python deps
         if: github.event_name != 'push'
@@ -59,6 +62,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
 
       - name: Build Astro site
         env:

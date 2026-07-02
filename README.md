@@ -16,12 +16,12 @@
 
 | 시점 | 워크플로 | 내용 |
 |---|---|---|
-| 🌅 **07:00** | `daily.yml` | 밤사이 **미국장** 모닝 브리핑 |
-| 🟢 **09:10** | `intraday_kr.yml` (open) | 한국장 **개장** 스냅샷 |
-| 🟡 **12:30** | `intraday_kr.yml` (mid) | **장중** 스냅샷 |
-| 🔴 **15:40** | `intraday_kr.yml` (close) | 한국장 **마감 심층 리포트** + **미국 반도체 연결 분석** |
+| 🌅 **07:00~** | `daily.yml` | 밤사이 **미국장** 모닝 브리핑 (화~토, 미국장 있는 날만) |
+| 🟢 **09:30~11:00** | `intraday_kr.yml` (open) | 한국장 **개장** 스냅샷 |
+| 🟡 **11:30~14:00** | `intraday_kr.yml` (mid) | **장중** 스냅샷 |
+| 🔴 **15:35~** | `intraday_kr.yml` (close) | 한국장 **마감 심층 리포트** + **미국 반도체 연결 분석** |
 
-> 개장·장중은 가벼운 스냅샷(시세·지표 변화·짧은 읽기), 마감은 풀 심층 리포트. cron은 GitHub 부하로 5~30분 지연될 수 있고, 시세는 yfinance 기준 한국 주식 **약 15~20분 지연**입니다.
+> 개장·장중은 가벼운 스냅샷(시세·지표 변화·짧은 읽기), 마감은 풀 심층 리포트. GitHub cron은 혼잡 시 **수 시간까지 지연**될 수 있어, cron을 촘촘히 걸어두고 각 실행이 **실제 도착한 KST 시각**으로 phase(개장/장중/마감)를 스스로 판정합니다 — 구간 밖·중복·휴장(오늘 봉 없음)이면 LLM 호출 없이 즉시 스킵. 시세는 yfinance 기준 한국 주식 **약 15~20분 지연**입니다.
 
 ## 주요 화면 (메인)
 
@@ -43,8 +43,8 @@
 
 **워크플로** (`.github/workflows/`)
 - `daily.yml` — 22:00 UTC(07:00 KST) 모닝 브리핑
-- `intraday_kr.yml` — 00:10/03:30/06:40 UTC(09:10/12:30/15:40 KST) 한국장 3회. `github.event.schedule`로 PHASE(open/mid/close) 매핑
-- 둘 다 `pages` concurrency 공유 + push 재시도 루프(동시 실행 경쟁 방지)
+- `intraday_kr.yml` — 30분 간격의 촘촘한 cron. PHASE는 스크립트가 실행 시점 KST로 자동 판정(`auto`) — cron 지연에도 라벨과 데이터가 어긋나지 않음. 캡처 없으면 커밋·빌드·배포 스킵
+- 둘 다 `pages` concurrency 공유 + push 재시도 루프(동시 실행 경쟁 방지) + pip/npm 캐시
 
 ```
 GitHub Actions → fetch/generate/intraday(Python) → *.json·*.md 커밋 → Astro 빌드 → GitHub Pages 배포
@@ -77,7 +77,7 @@ GitHub Actions → fetch/generate/intraday(Python) → *.json·*.md 커밋 → A
 | 바꾸고 싶은 것 | 위치 |
 |---|---|
 | 관심종목·뉴스 키워드·LLM 엔진(`provider`)·모델·thinking 예산 | `config.yaml` |
-| 점검 시각(개장/장중/마감) | `.github/workflows/intraday_kr.yml`의 cron (UTC = KST−9h) |
+| 점검 구간(개장/장중/마감) | `scripts/intraday_kr.py`의 `WINDOWS` (cron은 `intraday_kr.yml`, UTC = KST−9h) |
 | 모닝 브리핑 시각 | `.github/workflows/daily.yml`의 cron |
 | 브리핑·인트라데이 톤·구성(프롬프트) | `scripts/generate.py`, `scripts/intraday_kr.py` |
 | 한국장 심층/미국 분석 대상 종목 | `scripts/intraday_kr.py`의 `PRIMARY`/`US_SEMI` |
