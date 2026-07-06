@@ -8,7 +8,8 @@ import intraday from "../data/intraday.json";
 //  - 떠오른 해의 높이 = 시점(장중일수록 높음), 빛 색 = 시간대 온도
 //  - 지평선 위 별 = 밤사이 미국장 + 한국 지수 등락
 const { date } = Astro.props as { date?: string };
-const asOf = date ?? sentiment.asOf ?? "";
+// 빌드 시점에 아는 가장 최신 날짜(브리핑·인트라데이·센티먼트 중 최신) — 클라이언트에서 실제 현재 KST 날짜로 재보정됨
+const asOf = [date, (intraday as any)?.date, sentiment.asOf].filter(Boolean).sort().pop() ?? "";
 
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 let dateText = asOf;
@@ -117,7 +118,7 @@ const idx = wantIdx
       <span class="phase-when" data-phase-when>{PHASE_META[phase].sunLabel}</span>
       <span class="hero-engine">AI 분석 · {ENGINE}</span>
     </p>
-    <h1 class="hero-date">{dateText} {weekday && <span class="hero-wd">{weekday}요일</span>}</h1>
+    <h1 class="hero-date"><span data-date-text>{dateText}</span> <span class="hero-wd" data-date-wd>{weekday && `${weekday}요일`}</span></h1>
 
     {krStocks.length > 0 ? (
       <div class="hero-kr">
@@ -141,7 +142,7 @@ const idx = wantIdx
 </header>
 
 <script is:inline>
-  // 브라우저에서 현재 KST 기준으로 시점을 재보정 (빌드 사이에도 정확)
+  // 브라우저에서 현재 KST 기준으로 날짜·시점을 재보정 (빌드 사이에도 정확)
   (function () {
     var META = {
       dawn: ["개장 전", "밤사이 미국장 · 개장 대기"],
@@ -154,10 +155,19 @@ const idx = wantIdx
     var SUN = { dawn: 7, morning: 26, midday: 40, close: 13, night: 4, closed: 10 };
     var kst = new Date(Date.now() + 9 * 3600 * 1000);
     var day = kst.getUTCDay(), h = kst.getUTCHours();
+    var hero = document.querySelector(".hero-sky");
+    if (!hero) return;
+
+    // 접속 시점의 실제 KST 날짜로 갱신 (빌드가 오래됐어도 오늘 날짜 표시)
+    var WD = ["일", "월", "화", "수", "목", "금", "토"];
+    var dateEl = hero.querySelector("[data-date-text]");
+    var wdEl = hero.querySelector("[data-date-wd]");
+    if (dateEl) dateEl.textContent = kst.getUTCFullYear() + "년 " + (kst.getUTCMonth() + 1) + "월 " + kst.getUTCDate() + "일";
+    if (wdEl) wdEl.textContent = WD[day] + "요일";
+
     var p = (day === 0 || day === 6) ? "closed"
       : h < 9 ? "dawn" : h < 12 ? "morning" : h < 15 ? "midday" : h < 18 ? "close" : "night";
-    var hero = document.querySelector(".hero-sky");
-    if (!hero || hero.getAttribute("data-phase") === p) return;
+    if (hero.getAttribute("data-phase") === p) return;
     hero.setAttribute("data-phase", p);
     hero.style.setProperty("--sun", String(SUN[p]));
     var lab = hero.querySelector("[data-phase-label]");
