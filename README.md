@@ -16,7 +16,7 @@
 
 | 시점 | 워크플로 | 내용 |
 |---|---|---|
-| 🌅 **07:00~** | `daily.yml` | 밤사이 **미국장** 모닝 브리핑 (화~토, 미국장 있는 날만) |
+| 🌅 **07:10~** | `daily.yml` | 밤사이 **미국장** 모닝 브리핑 (화~토, 미국장 있는 날만) |
 | 🟢 **09:30~11:00** | `intraday_kr.yml` (open) | 한국장 **개장** 스냅샷 |
 | 🟡 **11:30~14:00** | `intraday_kr.yml` (mid) | **장중** 스냅샷 |
 | 🔴 **15:35~** | `intraday_kr.yml` (close) | 한국장 **마감 심층 리포트** + **미국 반도체 연결 분석** |
@@ -42,9 +42,9 @@
 - `deep_report.py` — 로컬용 단발 심층 리포트(matplotlib 차트 PNG, `reports/`는 gitignore)
 
 **워크플로** (`.github/workflows/`)
-- `daily.yml` — 22:00 UTC(07:00 KST) 모닝 브리핑
+- `daily.yml` — 22:10 UTC(07:10 KST) 모닝 브리핑
 - `intraday_kr.yml` — 30분 간격의 촘촘한 cron. PHASE는 스크립트가 실행 시점 KST로 자동 판정(`auto`) — cron 지연에도 라벨과 데이터가 어긋나지 않음. 캡처 없으면 커밋·빌드·배포 스킵
-- 둘 다 `pages` concurrency 공유 + push 재시도 루프(동시 실행 경쟁 방지) + pip/npm 캐시
+- 둘 다 `pages` concurrency 공유 + push 재시도 루프(전부 실패 시 런 실패로 알림) + Pages 배포 1회 자동 재시도 + pip/npm 캐시
 
 ```
 GitHub Actions → fetch/generate/intraday(Python) → *.json·*.md 커밋 → Astro 빌드 → GitHub Pages 배포
