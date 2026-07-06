@@ -155,12 +155,15 @@ def build_series(cfg, period="1y"):
             print(f"[warn] series {t}: {e}")
     if out:
         path.parent.mkdir(parents=True, exist_ok=True)
-        # 빈 응답으로 일부 티커가 빠져도 기존 series.json을 통째로 날리지 않도록 병합
+        # 빈 응답으로 일부 티커가 빠져도 기존 series.json을 통째로 날리지 않도록 병합.
+        # 단, config에서 뺀 티커가 영구 잔류하지 않도록 현재 티커 집합으로 한정한다.
+        current = {item["ticker"] for item in items}
         if path.exists():
             try:
                 prev = json.loads(path.read_text(encoding="utf-8"))
                 for k, v in prev.items():
-                    out.setdefault(k, v)
+                    if k in current:
+                        out.setdefault(k, v)
             except Exception:
                 pass
         path.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding="utf-8")

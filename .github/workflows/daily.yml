@@ -2,9 +2,12 @@ name: Daily Stock Briefing
 
 on:
   schedule:
-    # 22:00 UTC 월~금 = 화~토 07:00 KST — 직전 밤 미국장 세션이 있는 날만.
+    # 22:10 UTC 월~금 = 화~토 07:10 KST — 직전 밤 미국장 세션이 있는 날만.
     # (일·월 아침은 미국 휴장으로 금요일 데이터를 '밤사이'처럼 쓰게 되어 제외)
-    - cron: "0 22 * * 1-5"
+    # 정각(0분)은 GitHub cron 혼잡 시간대라 회피. intraday의 22시대 발화와도 겹치지 않게
+    # 어긋난 분을 쓴다(같은 concurrency 그룹 'pages'에서 pending인 daily가 intraday에
+    # 밀려 취소되면 그날 아침 브리핑이 통째로 빠지기 때문).
+    - cron: "10 22 * * 1-5"
   workflow_dispatch:        # 수동 실행 버튼
   push:                     # main에 코드 push 시 사이트 재배포 (데이터 수집은 건너뜀)
     branches: [main]
@@ -21,6 +24,7 @@ concurrency:
 jobs:
   briefing:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -53,11 +57,15 @@ jobs:
           git add briefings site/src/data/history.json site/src/data/series.json site/src/data/sentiment.json site/src/data/news.json
           git diff --cached --quiet || git commit -m "briefing: $(date -u -d '+9 hours' +'%Y-%m-%d')"
           # 원격에 다른 커밋(봇/다른 워크플로)이 있을 수 있으니 rebase 후 push.
-          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도(silent 데이터 손실 방지).
+          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도. 5회 전부 실패하면
+          # 스텝을 실패시켜 알림이 오게 한다(예전엔 마지막 sleep의 exit 0으로
+          # 조용히 통과해 커밋 유실이 무증상이었음).
+          ok=""
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push && break
+            git pull --rebase origin main && git push && { ok=1; break; }
             echo "push 충돌/실패 — 재시도 $i/5"; sleep 6
           done
+          [ -n "$ok" ] || { echo "push 최종 실패 — 브리핑 커밋 유실 위험"; exit 1; }
 
       - uses: actions/setup-node@v5
         with:
@@ -71,7 +79,7 @@ jobs:
           SITE_URL: "https://${{ github.repository_owner }}.github.io"
         run: |
           cd site
-          npm install
+          npm ci
           npm run build
 
       - name: Upload Pages artifact
@@ -80,4 +88,14 @@ jobs:
           path: site/dist
 
       - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true # Pages 일시 장애("try again later")는 1회 재시도로 흡수
+
+      - name: 배포 재시도 대기
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 90
+
+      - name: Deploy to GitHub Pages (재시도)
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4

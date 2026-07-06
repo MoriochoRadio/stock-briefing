@@ -6,7 +6,9 @@ name: Korea Intraday Snapshot
 # LLM 호출·커밋·배포는 실제 캡처된 하루 최대 3회만 일어난다.
 on:
   schedule:
-    - cron: "*/30 20-23 * * 0-4"  # 전일 저녁(UTC) 발화분 — 큰 지연 시 다음날 아침 KST 도착 대비
+    # 22시대(UTC)는 daily 브리핑(22:10)과 concurrency 그룹이 겹쳐 pending인 daily를
+    # 밀어내고 취소시킬 수 있어 비운다(20-21시·23시 발화만으로도 지연 대비는 충분).
+    - cron: "*/30 20-21,23 * * 0-4"  # 전일 저녁(UTC) 발화분 — 큰 지연 시 다음날 아침 KST 도착 대비
     - cron: "*/30 0-14 * * 1-5"   # 한국장 당일 (09:00~23:59 KST)
   workflow_dispatch:
     inputs:
@@ -28,6 +30,7 @@ concurrency:
 jobs:
   intraday:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -54,11 +57,14 @@ jobs:
           git config user.email "actions@github.com"
           git add site/src/data/intraday.json
           git diff --cached --quiet || git commit -m "intraday(${{ steps.snap.outputs.phase }}): $(date -u -d '+9 hours' +'%Y-%m-%d %H:%M') KST"
-          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도(silent 데이터 손실 방지).
+          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도. 5회 전부 실패하면
+          # 스텝을 실패시켜 알림이 오게 한다(조용한 커밋 유실 방지).
+          ok=""
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push && break
+            git pull --rebase origin main && git push && { ok=1; break; }
             echo "push 충돌/실패 — 재시도 $i/5"; sleep 6
           done
+          [ -n "$ok" ] || { echo "push 최종 실패 — 스냅샷 커밋 유실 위험"; exit 1; }
 
       - uses: actions/setup-node@v5
         if: steps.snap.outputs.captured == 'true'
@@ -74,7 +80,7 @@ jobs:
           SITE_URL: "https://${{ github.repository_owner }}.github.io"
         run: |
           cd site
-          npm install
+          npm ci
           npm run build
 
       - name: Upload Pages artifact
@@ -84,5 +90,15 @@ jobs:
           path: site/dist
 
       - name: Deploy to GitHub Pages
+        id: deploy
         if: steps.snap.outputs.captured == 'true'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true # Pages 일시 장애는 1회 재시도로 흡수 (다음 스냅샷이 30분 내 재배포하기도 함)
+
+      - name: 배포 재시도 대기
+        if: steps.snap.outputs.captured == 'true' && steps.deploy.outcome == 'failure'
+        run: sleep 90
+
+      - name: Deploy to GitHub Pages (재시도)
+        if: steps.snap.outputs.captured == 'true' && steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4

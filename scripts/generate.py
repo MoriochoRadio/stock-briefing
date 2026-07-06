@@ -128,7 +128,8 @@ def build_prompt(data, cfg):
 
 def call_gemini(prompt, cfg, key):
     model = cfg["llm"]["gemini_model"]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    # 키는 URL 쿼리 대신 헤더로 전달 — 예외 메시지·프록시 로그에 URL이 찍혀도 키가 새지 않는다
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     # thinking 예산: >0이면 추론을 켜 분석 깊이를 높인다(무료). thinking 토큰도 출력 한도를
     # 소비하므로 max_output_tokens보다 작게 둔다. 0=끔, -1=동적.
     budget = cfg["llm"].get("gemini_thinking_budget", 0)
@@ -140,7 +141,8 @@ def call_gemini(prompt, cfg, key):
         },
     }
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
+        url, data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "x-goog-api-key": key},
     )
     # 추론을 켜면 생성에 시간이 더 걸릴 수 있어 타임아웃을 늘린다.
     res = _urlopen_json(req, timeout=240)
