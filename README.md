@@ -1,5 +1,7 @@
 # 📈 반도체 중심 증시 트래커 (거의 무료 자동화)
 
+🇰🇷 한국어 · 🇬🇧 [English](README.en.md)
+
 [![Daily Stock Briefing](https://github.com/MoriochoRadio/stock-briefing/actions/workflows/daily.yml/badge.svg)](https://github.com/MoriochoRadio/stock-briefing/actions/workflows/daily.yml)
 [![Korea Intraday](https://github.com/MoriochoRadio/stock-briefing/actions/workflows/intraday_kr.yml/badge.svg)](https://github.com/MoriochoRadio/stock-briefing/actions/workflows/intraday_kr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
