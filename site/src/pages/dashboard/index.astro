@@ -1,6 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
 import SectorHeatmap from "../../components/SectorHeatmap.astro";
+import DataStatus from "../../components/DataStatus.astro";
 import MarketChart from "../../components/MarketChart.astro";
 import history from "../../data/history.json";
 import series from "../../data/series.json";
@@ -62,6 +63,8 @@ const tvAttr = (item) =>
       <a class="dash-back" href={base}><ArrowLeft size={14} /> 브리핑으로</a>
     </p>
   </header>
+
+  <DataStatus />
 
   <div class="bento">
     {fng && (

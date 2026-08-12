@@ -158,12 +158,8 @@ const idx = wantIdx
     var hero = document.querySelector(".hero-sky");
     if (!hero) return;
 
-    // 접속 시점의 실제 KST 날짜로 갱신 (빌드가 오래됐어도 오늘 날짜 표시)
-    var WD = ["일", "월", "화", "수", "목", "금", "토"];
-    var dateEl = hero.querySelector("[data-date-text]");
-    var wdEl = hero.querySelector("[data-date-wd]");
-    if (dateEl) dateEl.textContent = kst.getUTCFullYear() + "년 " + (kst.getUTCMonth() + 1) + "월 " + kst.getUTCDate() + "일";
-    if (wdEl) wdEl.textContent = WD[day] + "요일";
+    // 날짜는 실제 데이터 기준일을 그대로 유지한다. 접속 시점의 '오늘'으로 바꾸면
+    // 휴장·자동화 지연 때 전일 가격이 오늘 데이터처럼 보일 수 있다.
 
     var p = (day === 0 || day === 6) ? "closed"
       : h < 9 ? "dawn" : h < 12 ? "morning" : h < 15 ? "midday" : h < 18 ? "close" : "night";

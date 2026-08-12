@@ -110,6 +110,55 @@ def _clean_snapshot(snap):
     return {**snap, "quotes": clean}
 
 
+def build_quality(cfg, data):
+    """프론트엔드가 데이터 완전성·기준일·지연 가능성을 투명하게 표시하도록 품질 메타데이터를 생성한다.
+
+    미국장과 한국장은 종가 기준일이 서로 다를 수 있으므로, 단순히 오늘 날짜와 비교해
+    '오래된 데이터'라고 단정하지 않는다. 대신 각 그룹의 실제 기준일과 수집 성공률을
+    함께 기록해 독자가 해석할 수 있게 한다.
+    """
+    groups = {}
+    for key, label in (
+        ("indices", "지수·환율"),
+        ("watchlist_us", "미국 관심종목"),
+        ("watchlist_kr", "한국 관심종목"),
+    ):
+        expected = cfg.get(key, [])
+        quotes = data.get(key, [])
+        dates = sorted({str(q.get("date")) for q in quotes if q.get("date")})
+        coverage = round((len(quotes) / len(expected)) * 100, 1) if expected else 100.0
+        groups[key] = {
+            "label": label,
+            "expected": len(expected),
+            "received": len(quotes),
+            "coveragePct": coverage,
+            "asOfDates": dates,
+            "status": "complete" if len(quotes) == len(expected) else "partial",
+        }
+
+    return {
+        "generatedAt": data["generated_at"],
+        "dateKst": data["date_kst"],
+        "source": "Yahoo Finance via yfinance",
+        "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
+        "newsSource": "Google News RSS",
+        "newsQueries": len(cfg.get("news_queries", [])),
+        "newsCollected": len(data.get("news", [])),
+        "groups": groups,
+    }
+
+
+def write_quality(cfg, data):
+    """품질 메타데이터를 별도 JSON으로 기록해 페이지가 브리핑 본문과 독립적으로 읽게 한다."""
+    path = ROOT / "site" / "src" / "data" / "quality.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    quality = build_quality(cfg, data)
+    path.write_text(json.dumps(quality, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+    partial = sum(1 for group in quality["groups"].values() if group["status"] == "partial")
+    print(f"quality: {len(quality['groups']) - partial}/{len(quality['groups'])} group(s) complete")
+    return quality
+
+
 def update_history(data, keep_days=120):
     """site/src/data/history.json에 일별 스냅샷 누적 (대시보드 카드·차트용)"""
     path = ROOT / "site" / "src" / "data" / "history.json"
@@ -318,6 +367,7 @@ def main():
     build_series(cfg)
     build_sentiment(cfg, data)
     build_news(data)
+    write_quality(cfg, data)
     print(f"saved {out} — quotes:{len(data['indices'])+len(data['watchlist_us'])+len(data['watchlist_kr'])}, news:{len(data['news'])}")
 
 

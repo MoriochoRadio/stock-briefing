@@ -702,3 +702,46 @@ body.modal-open { overflow: hidden; }
   color: var(--sub);
   font-size: 0.74rem;
 }
+
+/* ── 브리핑 기사 근거 패널 ─────────────────────── */
+.b-section.b-sources {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+.b-section.b-sources h2::before {
+  background: linear-gradient(var(--accent), var(--horizon-2));
+}
+.b-section.b-sources ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.b-section.b-sources li {
+  position: relative;
+  margin: 0;
+  padding: 10px 12px 10px 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-soft) 45%, transparent);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+.b-section.b-sources li::before {
+  content: "↗";
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  color: var(--accent);
+  font-family: var(--font-num);
+  font-weight: 800;
+}
+.b-section.b-sources a {
+  font-weight: 700;
+}
+@media (max-width: 520px) {
+  .b-section { padding: 19px 18px; }
+  .b-section.b-sources li { padding: 9px 10px 9px 31px; font-size: 0.82rem; }
+  .b-section.b-sources li::before { left: 10px; top: 9px; }
+}

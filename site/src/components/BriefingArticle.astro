@@ -26,6 +26,7 @@
       if (node.tagName === "H2") {
         current = document.createElement("section");
         current.className = "b-section";
+        if ((node.textContent || "").indexOf("기사 근거") !== -1) current.classList.add("b-sources");
         current.appendChild(node);
         sections.push({ el: current, h2: node });
       } else if (current) {

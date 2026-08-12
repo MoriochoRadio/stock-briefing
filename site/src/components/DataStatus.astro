@@ -1,0 +1,104 @@
+---
+import quality from "../data/quality.json";
+import intraday from "../data/intraday.json";
+import { BadgeCheck, Clock3, Database, ShieldAlert } from "@lucide/astro";
+
+const q = quality as any;
+const intradayData = intraday as any;
+const latestSnap = (intradayData.snapshots ?? []).slice(-1)[0] ?? null;
+const intradayQuality = intradayData.dataQuality ?? (latestSnap ? {
+  primaryExpected: 2,
+  primaryReceived: (latestSnap.stocks ?? []).length,
+  primaryCoveragePct: Math.round(((latestSnap.stocks ?? []).length / 2) * 100),
+  primaryAsOfDates: [...new Set((latestSnap.stocks ?? []).map((s) => s.asof).filter(Boolean))],
+  delayed: Boolean(latestSnap.delayed),
+} : null);
+const groups = q.groups ?? {};
+const us = groups.watchlist_us;
+const kr = groups.watchlist_kr;
+const asOf = intradayData.updated_kst || q.generatedAt || "아직 수집 기록 없음";
+const quoteDates = [...new Set([
+  ...(us?.asOfDates ?? []),
+  ...(kr?.asOfDates ?? []),
+  ...(intradayQuality?.primaryAsOfDates ?? []),
+])].filter(Boolean);
+const hasDailyQuality = Object.keys(groups).length > 0;
+const hasPartial = !hasDailyQuality || [us, kr].some((group) => group?.status === "partial") || Boolean(intradayQuality && intradayQuality.primaryReceived < intradayQuality.primaryExpected);
+const isDelayed = Boolean(intradayQuality?.delayed);
+const state = isDelayed ? "지연 시세" : hasPartial ? "일부 수집" : "수집 완료";
+const StateIcon = isDelayed || hasPartial ? ShieldAlert : BadgeCheck;
+const pct = (value) => Number.isFinite(value) ? `${Number(value).toFixed(value % 1 ? 1 : 0)}%` : "–";
+---
+
+<section class:list={["data-status", "card", { caution: isDelayed || hasPartial }]} aria-label="데이터 상태" data-reveal>
+  <div class="status-head">
+    <div>
+      <p class="cap"><Database size={14} /> DATA STATUS</p>
+      <h2>자료 기준과 수집 상태</h2>
+    </div>
+    <span class:list={["state", { caution: isDelayed || hasPartial }]}><StateIcon size={14} /> {state}</span>
+  </div>
+
+  <p class="status-desc">
+    <Clock3 size={14} /> 마지막 반영 <b>{asOf}</b>{quoteDates.length > 0 && <> · 시세 기준일 {quoteDates.join(" · ")}</>}
+  </p>
+
+  <div class="status-grid">
+    <div class="metric">
+      <span>미국 관심종목</span>
+      <strong>{us ? `${us.received}/${us.expected}` : "–"}</strong>
+      <small>{us ? `수집 완전성 ${pct(us.coveragePct)}` : "다음 수집 후 표시"}</small>
+    </div>
+    <div class="metric">
+      <span>한국 관심종목</span>
+      <strong>{kr ? `${kr.received}/${kr.expected}` : "–"}</strong>
+      <small>{kr ? `수집 완전성 ${pct(kr.coveragePct)}` : "다음 수집 후 표시"}</small>
+    </div>
+    <div class="metric">
+      <span>한국장 스냅샷</span>
+      <strong>{intradayQuality ? `${intradayQuality.primaryReceived}/${intradayQuality.primaryExpected}` : "–"}</strong>
+      <small>{intradayQuality ? (isDelayed ? "지연 데이터 포함" : "시세 기준일 확인") : "스냅샷 대기"}</small>
+    </div>
+    <div class="metric">
+      <span>기사 근거</span>
+      <strong>{Number(q.newsCollected) || "–"}</strong>
+      <small>{q.newsCollected ? `${q.newsQueries}개 검색어에서 수집` : "다음 수집 후 표시"}</small>
+    </div>
+  </div>
+
+  <details>
+    <summary>데이터 해석 안내</summary>
+    <p>{intradayQuality?.quoteNotice || q.quoteNotice}</p>
+    <p>시장 분석은 수집 시점의 가격·기술 지표·기사 헤드라인을 종합한 정보이며, 기사 근거는 브리핑 본문 아래에서 직접 확인할 수 있습니다.</p>
+  </details>
+</section>
+
+<style>
+  .data-status { margin: 14px 0 24px; padding: 18px 20px; }
+  .status-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .cap { display: inline-flex; align-items: center; gap: 5px; margin: 0 0 5px; color: var(--accent); font-family: var(--font-num); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; }
+  h2 { margin: 0; font-size: 1rem; letter-spacing: -0.02em; }
+  .state { display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 5px 9px; border: 1px solid color-mix(in srgb, var(--up) 40%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--up) 10%, transparent); color: var(--up); font-size: 0.74rem; font-weight: 800; }
+  .state.caution { border-color: color-mix(in srgb, #e6a23c 45%, var(--border)); background: color-mix(in srgb, #e6a23c 10%, transparent); color: #d8891c; }
+  :global(html[data-theme="dark"]) .state.caution { color: #f5bd5b; }
+  .status-desc { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 12px 0 15px; color: var(--sub); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+  .status-desc b { color: var(--text); font-weight: 700; }
+  .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .metric { min-width: 0; padding: 13px 14px; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--bg-soft) 45%, transparent); }
+  .metric:last-child { border-right: 0; }
+  .metric span, .metric small { display: block; color: var(--sub); font-size: 0.7rem; }
+  .metric strong { display: block; margin: 3px 0 4px; color: var(--text); font-family: var(--font-num); font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+  .metric small { line-height: 1.4; }
+  details { margin-top: 13px; color: var(--sub); font-size: 0.78rem; line-height: 1.65; }
+  summary { width: fit-content; cursor: pointer; color: var(--accent); font-weight: 700; }
+  details p { margin: 7px 0 0; }
+  @media (max-width: 650px) {
+    .data-status { padding: 16px; }
+    .status-grid { grid-template-columns: repeat(2, 1fr); }
+    .metric:nth-child(2) { border-right: 0; }
+    .metric:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+  }
+  @media (max-width: 390px) {
+    .status-head { flex-direction: column; gap: 10px; }
+  }
+</style>

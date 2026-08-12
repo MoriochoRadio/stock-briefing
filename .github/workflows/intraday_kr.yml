@@ -1,15 +1,10 @@
 name: Korea Intraday Snapshot
 
-# GitHub 공용 러너의 cron은 혼잡 시 수 시간 지연될 수 있다(실측 최대 ~4.5h).
-# 그래서 cron을 촘촘히 걸어두고, phase(개장/장중/마감) 판정은 스크립트가
-# '실행된 시점의 실제 KST'로 한다 — 구간 밖/이미 캡처/휴장이면 즉시 스킵.
-# LLM 호출·커밋·배포는 실제 캡처된 하루 최대 3회만 일어난다.
 on:
   schedule:
-    # 22시대(UTC)는 daily 브리핑(22:10)과 concurrency 그룹이 겹쳐 pending인 daily를
-    # 밀어내고 취소시킬 수 있어 비운다(20-21시·23시 발화만으로도 지연 대비는 충분).
-    - cron: "*/30 20-21,23 * * 0-4"  # 전일 저녁(UTC) 발화분 — 큰 지연 시 다음날 아침 KST 도착 대비
-    - cron: "*/30 0-14 * * 1-5"   # 한국장 당일 (09:00~23:59 KST)
+    # 22시 UTC는 모닝 브리핑과 겹치지 않게 비우고, 실제 KST 도착 시각은 스크립트가 판정한다.
+    - cron: "*/30 20-21,23 * * 0-4"
+    - cron: "*/30 0-14 * * 1-5"
   workflow_dispatch:
     inputs:
       phase:
@@ -23,14 +18,13 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   intraday:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      captured: ${{ steps.snap.outputs.captured }}
+      phase: ${{ steps.snap.outputs.phase }}
     steps:
       - uses: actions/checkout@v5
 
@@ -50,15 +44,13 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/intraday_kr.py "${{ github.event.inputs.phase || 'auto' }}"
 
-      - name: Commit intraday snapshot
+      - name: Commit intraday snapshot and data quality metadata
         if: steps.snap.outputs.captured == 'true'
         run: |
           git config user.name "briefing-bot"
           git config user.email "actions@github.com"
           git add site/src/data/intraday.json
           git diff --cached --quiet || git commit -m "intraday(${{ steps.snap.outputs.phase }}): $(date -u -d '+9 hours' +'%Y-%m-%d %H:%M') KST"
-          # 동시 실행 경쟁으로 push가 거부될 수 있어 재시도. 5회 전부 실패하면
-          # 스텝을 실패시켜 알림이 오게 한다(조용한 커밋 유실 방지).
           ok=""
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push && { ok=1; break; }
@@ -66,15 +58,28 @@ jobs:
           done
           [ -n "$ok" ] || { echo "push 최종 실패 — 스냅샷 커밋 유실 위험"; exit 1; }
 
+  # 스냅샷이 실제로 생성됐을 때만 배포한다. 공통 동시성은 이 짧은 배포 job에만 걸어
+  # 30분 주기의 수집·분석 작업이 모닝 브리핑과 서로 대기열에서 취소되지 않게 한다.
+  deploy:
+    needs: intraday
+    if: needs.intraday.outputs.captured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
       - uses: actions/setup-node@v5
-        if: steps.snap.outputs.captured == 'true'
         with:
           node-version: "22"
           cache: "npm"
           cache-dependency-path: site/package-lock.json
 
       - name: Build Astro site
-        if: steps.snap.outputs.captured == 'true'
         env:
           BASE_PATH: "/${{ github.event.repository.name }}"
           SITE_URL: "https://${{ github.repository_owner }}.github.io"
@@ -84,21 +89,19 @@ jobs:
           npm run build
 
       - name: Upload Pages artifact
-        if: steps.snap.outputs.captured == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site/dist
 
       - name: Deploy to GitHub Pages
         id: deploy
-        if: steps.snap.outputs.captured == 'true'
         uses: actions/deploy-pages@v4
-        continue-on-error: true # Pages 일시 장애는 1회 재시도로 흡수 (다음 스냅샷이 30분 내 재배포하기도 함)
+        continue-on-error: true
 
       - name: 배포 재시도 대기
-        if: steps.snap.outputs.captured == 'true' && steps.deploy.outcome == 'failure'
+        if: steps.deploy.outcome == 'failure'
         run: sleep 90
 
       - name: Deploy to GitHub Pages (재시도)
-        if: steps.snap.outputs.captured == 'true' && steps.deploy.outcome == 'failure'
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4

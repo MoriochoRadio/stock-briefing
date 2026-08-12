@@ -51,6 +51,24 @@ def resolve_phase(now, cur):
     return None
 
 
+def snapshot_quality(now, stocks, market, delayed):
+    """한국장 스냅샷의 실제 기준일과 수집 완전성을 사용자 화면에 전달한다."""
+    market_available = sum(1 for item in (market or {}).values() if item)
+    stock_dates = sorted({str(s.get("asof")) for s in stocks if s.get("asof")})
+    return {
+        "generatedAt": now.isoformat(),
+        "primaryExpected": len(PRIMARY),
+        "primaryReceived": len(stocks),
+        "primaryCoveragePct": round((len(stocks) / len(PRIMARY)) * 100, 1) if PRIMARY else 100.0,
+        "primaryAsOfDates": stock_dates,
+        "marketExpected": 2,
+        "marketReceived": market_available,
+        "marketCoveragePct": round((market_available / 2) * 100, 1),
+        "delayed": delayed,
+        "quoteNotice": "한국장 시세는 Yahoo Finance(yfinance) 기준으로 약 15~20분 지연될 수 있으며 거래소 공식 실시간 시세가 아닙니다.",
+    }
+
+
 def _emit_output(captured, phase=""):
     """GitHub Actions 후속 스텝(커밋·빌드·배포)이 스킵 여부를 알 수 있게 출력."""
     out = os.environ.get("GITHUB_OUTPUT")
@@ -327,7 +345,13 @@ def main():
     snaps.append(snap)
     order = {"open": 0, "mid": 1, "close": 2}
     snaps.sort(key=lambda s: order.get(s["phase"], 9))
-    cur.update(date=today, updated_kst=f"{today} {tnow}", market=market, snapshots=snaps)
+    cur.update(
+        date=today,
+        updated_kst=f"{today} {tnow}",
+        market=market,
+        snapshots=snaps,
+        dataQuality=snapshot_quality(now, stocks, market, delayed),
+    )
 
     # 한국장 마감 시, 직전 미국 반도체 세션을 한국과 연결지어 대략 분석
     if phase == "close" and us:

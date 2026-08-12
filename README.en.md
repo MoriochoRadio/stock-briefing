@@ -31,22 +31,24 @@ Tracks the US and Korean stock markets **all day long**, automatically generatin
 - **Today's Korean Market Timeline** — open→mid→close snapshots fill in over the day, with Samsung and SK hynix technical indicators (trend, RSI, MACD…) + LLM analysis
 - **The Two Semiconductor Giants** — interactive charts for Samsung and SK hynix (price + SMA20/60/120 moving averages)
 - **US Semiconductor Connection** — NVIDIA, AMD, Micron, TSMC, Broadcom, ASML + the Philadelphia Semiconductor Index (SOX), with analysis of links to the Korean market (decoupling, HBM demand, etc.)
+- **Data-status panel** — surfaces collection time, actual quote dates, watchlist coverage, and possible delay on both Home and Dashboard, so prior-session prices are not presented as current data during holidays or delayed runs
+- **Verifiable briefing** — stable evidence IDs are assigned to collected headlines; only citations actually used by the LLM are rendered as clickable entries in the `Article evidence` section
 - Plus — today's briefing, key headlines, market mood (Fear & Greed Index), watchlist quote cards, index charts
 - **Dashboard** (`/dashboard`) — bento grid, sector heatmap · **Archive** — past briefings by date
 
 ## How It Works
 
 **Scripts** (`scripts/`)
-- `fetch_data.py` — collects yfinance quotes + Google News RSS + CNN Fear & Greed Index → `sentiment/series/news/history.json`
-- `generate.py` — writes the morning briefing with the LLM → `briefings/<date>.md`. Engine calls are factored into `run_llm()` (built-in retries and engine fallback, shared with the intraday script)
-- `intraday_kr.py` — Korean market open/mid/close + (at close) US semiconductor analysis → `site/src/data/intraday.json`. If the LLM fails, existing real analysis is preserved (no downgrade)
+- `fetch_data.py` — collects yfinance quotes + Google News RSS + CNN Fear & Greed Index → `sentiment/series/news/history.json` and `quality.json` (coverage, as-of dates, sources)
+- `generate.py` — writes the morning briefing with the LLM → `briefings/<date>.md`. Engine calls are factored into `run_llm()` (built-in retries and engine fallback, shared with the intraday script); only permitted news evidence IDs are kept and rendered as clickable sources
+- `intraday_kr.py` — Korean market open/mid/close + (at close) US semiconductor analysis → `site/src/data/intraday.json`, including snapshot-level coverage, as-of dates, and delay status. If the LLM fails, existing real analysis is preserved (no downgrade)
 - `ta.py` — shared technical indicators (RSI, MACD, ATR, SMA, Bollinger Bands, trend detection)
 - `deep_report.py` — one-off local deep-dive report (matplotlib chart PNGs; `reports/` is gitignored)
 
 **Workflows** (`.github/workflows/`)
 - `daily.yml` — morning briefing at 22:10 UTC (07:10 KST)
 - `intraday_kr.yml` — dense cron every 30 minutes. PHASE is auto-determined by the script from the KST time at execution (`auto`) — labels and data stay consistent even when cron is delayed. If nothing is captured, commit/build/deploy are skipped
-- Both share `pages` concurrency + a push retry loop (the run fails with a notification if all attempts fail) + one automatic Pages deploy retry + pip/npm caching
+- Data collection and analysis run independently; only the **Pages deployment job** is serialized in the shared `pages-deploy` queue. The deploy job checks out current `main` immediately before its build, preventing an old workflow SHA from being published, while retaining push retries, one automatic Pages retry, and pip/npm caching
 
 ```
 GitHub Actions → fetch/generate/intraday (Python) → commit *.json/*.md → Astro build → GitHub Pages deploy

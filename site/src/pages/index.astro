@@ -2,6 +2,7 @@
 import { getCollection, render } from "astro:content";
 import Base from "../layouts/Base.astro";
 import Hero from "../components/Hero.astro";
+import DataStatus from "../components/DataStatus.astro";
 import MarketMood from "../components/MarketMood.astro";
 import IntradayTimeline from "../components/IntradayTimeline.astro";
 import StockCharts from "../components/StockCharts.astro";
@@ -23,6 +24,8 @@ if (latest) ({ Content } = await render(latest));
 
 <Base>
   <Hero date={latest?.id} />
+
+  <DataStatus />
 
   <MarketMood />
 

@@ -31,22 +31,24 @@
 - **오늘 한국장 타임라인** — 개장→장중→마감 스냅샷이 하루 동안 채워지며, 삼성·SK하이닉스 기술적 지표(추세·RSI·MACD…) + LLM 분석
 - **반도체 양대 추이** — 삼성·SK하이닉스 인터랙티브 차트(가격 + 이동평균 SMA20/60/120)
 - **미국 반도체 연결** — 엔비디아·AMD·마이크론·TSMC·브로드컴·ASML + 필라델피아 반도체지수(SOX), 한국장과의 연결고리(디커플링·HBM 수요 등) 분석
+- **데이터 상태 패널** — 수집 시각·실제 시세 기준일·종목 수집 완전성·지연 가능성을 메인과 대시보드에서 즉시 표시. 휴장·지연 때 전일 시세가 오늘 데이터처럼 보이지 않게 설계
+- **검증 가능한 브리핑** — 기사 제목에 안정적 근거 ID를 부여하고, LLM이 실제로 인용한 기사만 본문 끝의 클릭 가능한 `기사 근거` 섹션에 연결
 - 그 외 — 오늘의 브리핑, 주요 헤드라인, 시장 분위기(공포·탐욕 지수), 관심종목 시세 카드, 지수 차트
 - **대시보드** (`/dashboard`) — 벤토 그리드, 섹터 히트맵 · **아카이브** — 날짜별 과거 브리핑
 
 ## 동작 구조
 
 **스크립트** (`scripts/`)
-- `fetch_data.py` — yfinance 시세 + Google News RSS + CNN 공포·탐욕지수 수집 → `sentiment/series/news/history.json`
-- `generate.py` — 모닝 브리핑 LLM 작성 → `briefings/날짜.md`. 엔진 호출은 `run_llm()`로 분리(재시도·엔진 폴백 내장, 인트라데이와 공유)
-- `intraday_kr.py` — 한국장 개장/장중/마감 + (마감 시) 미국 반도체 분석 → `site/src/data/intraday.json`. LLM 실패해도 기존 실제 분석을 보존(다운그레이드 방지)
+- `fetch_data.py` — yfinance 시세 + Google News RSS + CNN 공포·탐욕지수 수집 → `sentiment/series/news/history.json`, `quality.json`(수집 완전성·기준일·출처)
+- `generate.py` — 모닝 브리핑 LLM 작성 → `briefings/날짜.md`. 엔진 호출은 `run_llm()`로 분리(재시도·엔진 폴백 내장, 인트라데이와 공유)하며, 허용된 뉴스 근거 ID만 남기고 클릭 가능한 출처를 생성
+- `intraday_kr.py` — 한국장 개장/장중/마감 + (마감 시) 미국 반도체 분석 → `site/src/data/intraday.json`. 스냅샷별 수집 완전성·기준일·지연 상태를 함께 기록하며, LLM 실패해도 기존 실제 분석을 보존(다운그레이드 방지)
 - `ta.py` — 공유 기술적 지표(RSI·MACD·ATR·SMA·볼린저·추세판정)
 - `deep_report.py` — 로컬용 단발 심층 리포트(matplotlib 차트 PNG, `reports/`는 gitignore)
 
 **워크플로** (`.github/workflows/`)
 - `daily.yml` — 22:10 UTC(07:10 KST) 모닝 브리핑
 - `intraday_kr.yml` — 30분 간격의 촘촘한 cron. PHASE는 스크립트가 실행 시점 KST로 자동 판정(`auto`) — cron 지연에도 라벨과 데이터가 어긋나지 않음. 캡처 없으면 커밋·빌드·배포 스킵
-- 둘 다 `pages` concurrency 공유 + push 재시도 루프(전부 실패 시 런 실패로 알림) + Pages 배포 1회 자동 재시도 + pip/npm 캐시
+- 데이터 수집·분석은 독립 실행하고, **Pages 배포 job만** 공통 `pages-deploy` 대기열에서 직렬화. 배포 직전 `main`을 다시 checkout해 오래된 워크플로 SHA 배포를 방지하며, push 재시도 루프·Pages 1회 재시도·pip/npm 캐시를 유지
 
 ```
 GitHub Actions → fetch/generate/intraday(Python) → *.json·*.md 커밋 → Astro 빌드 → GitHub Pages 배포

@@ -4,6 +4,7 @@
 import json
 import os
 import time
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -56,7 +57,8 @@ PROMPT_TEMPLATE = """당신은 한국 개인투자자를 위한 아침 시장 �
 
 [분석 원칙]
 - 제공된 데이터에 없는 수치(장중 고저, RSI·MACD 등 보조지표, 거래량 등)는 절대 지어내지 말 것. 오직 종가·등락률·시장 분위기·헤드라인이 담은 정보만 사용한다.
-- 헤드라인으로 확인되지 않는 원인은 "~로 추정"이라고 명시하고, 상관(같이 움직임)과 인과(원인-결과)를 구분한다.
+- 헤드라인으로 확인되지 않는 원인은 "~로 추정"이라고 명시하고, 상관(같이 움직임)과 인과(원인-결과)를 구분한다. 기사 제목만으로 확정할 수 없는 세부 수치·일정·수급·실적·목표가는 쓰지 않는다.
+- 뉴스에서 가져온 고유 사실 또는 해석 문장 끝에는 제공된 기사 ID만 사용해 [N01]처럼 인용한다. 존재하지 않는 기사 ID를 만들지 말고, 인용할 근거가 없으면 그 사실을 삭제한다.
 - 노이즈 제거: 가격에 의미 있는 이슈만 다룬다. 헤드라인 단순 나열 금지 — 항상 "이게 관심종목·지수에 어떤 의미인가"로 해석한다.
 - 확증편향 경계: 하나의 서사에 끼워 맞추지 말 것. 반대 시나리오가 성립하면 함께 짚는다.
 - 투자 권유·매수매도 단정 금지. 시사점은 단정이 아니라 "관찰 포인트" 수준으로 제시한다.
@@ -112,18 +114,77 @@ def build_mood(sent):
     return "\n".join(lines) or "(시장 분위기 데이터 없음)"
 
 
+def build_news_evidence(data):
+    """수집된 기사 헤드라인에 안정적인 근거 ID를 붙인다.
+
+    기사 전문을 읽지 않는 RSS 파이프라인이므로 제목에서 확인할 수 없는 구체 수치나
+    인과를 모델이 확대 해석하지 않도록, 제목·출처·링크를 하나의 증거 단위로 취급한다.
+    """
+    evidence = []
+    seen = set()
+    for item in data.get("news", []):
+        raw_title = str(item.get("title", "")).strip()
+        link = str(item.get("link", "")).strip()
+        # Google News RSS 제목의 마지막 ' - 매체명' 접미사를 분리한다. 대시가 포함된
+        # 제목은 rsplit(마지막 한 번)으로 보존한다.
+        title, sep, publisher = raw_title.rpartition(" - ")
+        title = title.strip() if sep and title.strip() else raw_title
+        publisher = publisher.strip() if sep else ""
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        evidence.append({
+            "id": f"N{len(evidence) + 1:02d}",
+            "title": title,
+            "source": publisher or str(item.get("query", "뉴스 검색")).strip(),
+            "link": link,
+        })
+    return evidence
+
+
 def build_prompt(data, cfg):
     quotes = []
     for group, label in [("indices", "지수/환율"), ("watchlist_us", "미국 관심종목"), ("watchlist_kr", "한국 관심종목")]:
         for q in data[group]:
             quotes.append(f"- [{label}] {q['name']}({q['ticker']}): {q['close']:,} ({q['change_pct']:+.2f}%, 기준일 {q['date']})")
-    news = [f"- ({n['query']}) {n['title']}" for n in data["news"]]
-    return PROMPT_TEMPLATE.format(
+    evidence = build_news_evidence(data)
+    news = [f"- [{n['id']}] ({n['source']}) {n['title']}" for n in evidence]
+    prompt = PROMPT_TEMPLATE.format(
         profile=cfg["profile"]["style"],
         quotes="\n".join(quotes) or "(수집 실패)",
         mood=build_mood(load_sentiment()),
         news="\n".join(news) or "(수집 실패)",
     )
+    return prompt, evidence
+
+
+def append_evidence_references(body, evidence):
+    """허용된 기사 ID만 남기고, 실제 인용된 기사에 대한 클릭 가능한 출처 목록을 덧붙인다."""
+    valid = {item["id"] for item in evidence}
+    cited = []
+
+    def keep_only_known(match):
+        ref = match.group(1)
+        if ref in valid:
+            if ref not in cited:
+                cited.append(ref)
+            return f"[{ref}]"
+        return ""
+
+    cleaned = re.sub(r"\[(N\d{2})\]", keep_only_known, body or "").strip()
+    if not cited:
+        return cleaned
+
+    by_id = {item["id"]: item for item in evidence}
+    lines = ["## 🔗 기사 근거"]
+    for ref in cited:
+        item = by_id[ref]
+        title = item["title"].replace("]", "\\]")
+        if item["link"]:
+            lines.append(f"- [{ref}] [{title}]({item['link']}) · {item['source']}")
+        else:
+            lines.append(f"- [{ref}] {title} · {item['source']}")
+    return cleaned + "\n\n" + "\n".join(lines)
 
 
 def call_gemini(prompt, cfg, key):
@@ -221,12 +282,14 @@ def run_llm(prompt, cfg):
 def main():
     cfg = yaml.safe_load(load(ROOT / "config.yaml"))
     data = json.loads(load(ROOT / "data.json"))
-    prompt = build_prompt(data, cfg)
+    prompt, evidence = build_prompt(data, cfg)
 
     body, engine = run_llm(prompt, cfg)
     if body is None:
         body = fallback_briefing(data)
-    print(f"engine: {engine}")
+    else:
+        body = append_evidence_references(body, evidence)
+    print(f"engine: {engine}, evidence: {len(evidence)}")
 
     date = data["date_kst"]
     md = f"# 📈 아침 시장 브리핑 — {date} ({data['weekday_kr']})\n\n{body}\n\n---\n*자동 생성 브리핑 (엔진: {engine}). 투자 권유가 아닌 정보 제공입니다.*\n"
