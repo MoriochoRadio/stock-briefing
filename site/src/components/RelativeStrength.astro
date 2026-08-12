@@ -1,0 +1,143 @@
+---
+import seriesData from "../data/series.json";
+import { ArrowLeftRight, ChartSpline, Trophy } from "@lucide/astro";
+
+const series = seriesData as Record<string, [string, number][]>;
+const SAMSUNG = series["005930.KS"] ?? [];
+const HYNIX = series["000660.KS"] ?? [];
+const PERIODS = [
+  { id: "1M", months: 1, label: "1개월" },
+  { id: "3M", months: 3, label: "3개월" },
+  { id: "6M", months: 6, label: "6개월" },
+  { id: "1Y", months: 12, label: "1년" },
+];
+
+function normalized(arr: [string, number][], months: number) {
+  if (arr.length < 2) return [];
+  const last = new Date(arr[arr.length - 1][0] + "T00:00:00Z");
+  const from = new Date(last);
+  from.setUTCMonth(from.getUTCMonth() - months);
+  const filtered = arr.filter(([date]) => date >= from.toISOString().slice(0, 10));
+  const base = filtered[0]?.[1];
+  if (!base) return [];
+  return filtered.map(([time, value]) => ({ time, value: +((value / base) * 100).toFixed(2) }));
+}
+function gain(arr: { value: number }[]) {
+  if (arr.length < 2) return null;
+  return +(((arr[arr.length - 1].value / arr[0].value - 1) * 100).toFixed(2));
+}
+const payload: Record<string, any> = {};
+for (const period of PERIODS) {
+  const samsung = normalized(SAMSUNG, period.months);
+  const hynix = normalized(HYNIX, period.months);
+  payload[period.id] = {
+    samsung,
+    hynix,
+    samsungGain: gain(samsung),
+    hynixGain: gain(hynix),
+    asOf: SAMSUNG.at(-1)?.[0] ?? HYNIX.at(-1)?.[0] ?? "",
+  };
+}
+const ready = PERIODS.some((period) => payload[period.id].samsung.length > 1 && payload[period.id].hynix.length > 1);
+const defaultPeriod = "3M";
+const initial = payload[defaultPeriod];
+const pct = (n: number | null) => n === null ? "–" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(1)}%`;
+const leader = initial.samsungGain === null || initial.hynixGain === null ? null
+  : initial.samsungGain === initial.hynixGain ? "동률"
+    : initial.samsungGain > initial.hynixGain ? "삼성전자 우위" : "SK하이닉스 우위";
+---
+
+{ready && (
+  <section class="relative-wrap" id="relative-strength" data-reveal>
+    <div class="eyebrow"><span class="tag">COMPARE</span> 반도체 상대 강도 <span class="line"></span></div>
+    <section class="relative card">
+      <header class="rs-head">
+        <div>
+          <p class="rs-cap"><ArrowLeftRight size={14} /> RELATIVE STRENGTH</p>
+          <h2>삼성전자 vs SK하이닉스</h2>
+          <p>동일 기준점(100)에서 두 종목의 성과를 비교합니다. 절대 주가가 아닌 <b>기간 수익률의 차이</b>를 읽는 차트입니다.</p>
+        </div>
+        <div class="rs-badge" data-leader><Trophy size={14} /> {leader ?? "데이터 대기"}</div>
+      </header>
+
+      <div class="rs-stats" aria-live="polite">
+        <div class="rs-stat samsung"><span>삼성전자</span><strong data-samsung-gain>{pct(initial.samsungGain)}</strong><small data-samsung-note>기준점 100 대비</small></div>
+        <div class="rs-stat hynix"><span>SK하이닉스</span><strong data-hynix-gain>{pct(initial.hynixGain)}</strong><small data-hynix-note>기준점 100 대비</small></div>
+        <div class="rs-stat spread"><span>성과 격차</span><strong data-spread>{initial.samsungGain !== null && initial.hynixGain !== null ? `${Math.abs(initial.samsungGain - initial.hynixGain).toFixed(1)}%p` : "–"}</strong><small data-asof>{initial.asOf} 기준</small></div>
+      </div>
+
+      <div class="rs-tools">
+        <div class="rs-legend"><span><i class="samsung"></i>삼성전자</span><span><i class="hynix"></i>SK하이닉스</span><span><i class="base"></i>기준점 100</span></div>
+        <div class="rs-ranges" role="group" aria-label="상대 강도 비교 기간">
+          {PERIODS.map((period) => <button type="button" class:list={["rs-range", { active: period.id === defaultPeriod }]} data-rs-range={period.id}>{period.id}</button>)}
+        </div>
+      </div>
+      <div class="rs-chart" id="relative-strength-chart"></div>
+      <p class="rs-foot"><ChartSpline size={13} /> 동일 기간 첫 종가를 100으로 정규화했습니다. 수익률은 가격 변동 기준이며, 배당·거래 비용·환율은 반영하지 않습니다.</p>
+    </section>
+    <script type="application/json" id="relative-strength-data" set:html={JSON.stringify(payload)} />
+  </section>
+)}
+
+<script>
+  import { createChart, LineSeries } from "lightweight-charts";
+
+  const holder = document.getElementById("relative-strength-chart");
+  const payloadEl = document.getElementById("relative-strength-data");
+  if (holder && payloadEl) {
+    const payload = JSON.parse(payloadEl.textContent ?? "{}");
+    const readColors = () => {
+      const css = getComputedStyle(document.documentElement);
+      return { text: css.getPropertyValue("--sub").trim(), grid: css.getPropertyValue("--border").trim(), base: css.getPropertyValue("--sub").trim() };
+    };
+    const colors = readColors();
+    const chart = createChart(holder, {
+      autoSize: true,
+      layout: { background: { color: "transparent" }, textColor: colors.text, fontFamily: '"Pretendard Variable", Pretendard, sans-serif' },
+      grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+      crosshair: { horzLine: { labelBackgroundColor: "#778" }, vertLine: { labelBackgroundColor: "#778" } },
+      localization: { priceFormatter: (value) => value.toFixed(1) },
+    });
+    const samsung = chart.addSeries(LineSeries, { color: "#e0475e", lineWidth: 2.5, priceLineVisible: false, lastValueVisible: true });
+    const hynix = chart.addSeries(LineSeries, { color: "#3a82e0", lineWidth: 2.5, priceLineVisible: true, lastValueVisible: true, priceLineColor: colors.base, priceLineStyle: 2, priceLineWidth: 1 });
+    const fmtPct = (value) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+    const setPeriod = (period) => {
+      const data = payload[period];
+      if (!data) return;
+      samsung.setData(data.samsung ?? []);
+      hynix.setData(data.hynix ?? []);
+      chart.timeScale().fitContent();
+      const s = data.samsungGain, h = data.hynixGain;
+      const leader = s === null || h === null ? "데이터 대기" : s === h ? "동률" : s > h ? "삼성전자 우위" : "SK하이닉스 우위";
+      const qs = (selector) => document.querySelector(selector);
+      const sg = qs("[data-samsung-gain]"); if (sg) sg.textContent = s === null ? "–" : fmtPct(s);
+      const hg = qs("[data-hynix-gain]"); if (hg) hg.textContent = h === null ? "–" : fmtPct(h);
+      const spread = qs("[data-spread]"); if (spread) spread.textContent = s === null || h === null ? "–" : `${Math.abs(s - h).toFixed(1)}%p`;
+      const asof = qs("[data-asof]"); if (asof) asof.textContent = `${data.asOf ?? "–"} 기준`;
+      const badge = qs("[data-leader]"); if (badge) badge.childNodes[1] && (badge.childNodes[1].textContent = ` ${leader}`);
+    };
+    setPeriod("3M");
+    document.querySelectorAll("[data-rs-range]").forEach((button) => button.addEventListener("click", () => {
+      setPeriod(button.dataset.rsRange ?? "3M");
+      document.querySelectorAll("[data-rs-range]").forEach((node) => node.classList.toggle("active", node === button));
+    }));
+    window.addEventListener("themechange", () => {
+      const next = readColors();
+      chart.applyOptions({ layout: { textColor: next.text }, grid: { vertLines: { color: next.grid }, horzLines: { color: next.grid } } });
+      hynix.applyOptions({ priceLineColor: next.base });
+    });
+  }
+</script>
+
+<style>
+  .relative-wrap { margin: 6px 0 8px; }.relative { padding: 20px; overflow: hidden; }
+  .rs-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }.rs-cap { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 5px; color: var(--accent); font-family: var(--font-num); font-size: .67rem; font-weight: 800; letter-spacing: .11em; }.rs-head h2 { margin: 0; font-size: 1.14rem; letter-spacing: -.025em; }.rs-head p:not(.rs-cap) { max-width: 58ch; margin: 6px 0 0; color: var(--sub); font-size: .82rem; line-height: 1.6; }.rs-head p b { color: var(--text); }
+  .rs-badge { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border)); border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: .75rem; font-weight: 800; }
+  .rs-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 17px 0 15px; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--border); }.rs-stat { padding: 12px 14px; background: var(--card); }.rs-stat span, .rs-stat small { display: block; color: var(--sub); font-size: .72rem; }.rs-stat strong { display: block; margin: 3px 0; font-family: var(--font-num); font-size: 1.14rem; font-variant-numeric: tabular-nums; }.rs-stat.samsung strong { color: var(--up); }.rs-stat.hynix strong { color: var(--down); }.rs-stat.spread strong { color: var(--text); }
+  .rs-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }.rs-legend { display: flex; flex-wrap: wrap; gap: 12px; }.rs-legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--sub); font-size: .72rem; font-weight: 600; }.rs-legend i { display: inline-block; width: 11px; height: 3px; border-radius: 2px; }.rs-legend .samsung { background: #e0475e; }.rs-legend .hynix { background: #3a82e0; }.rs-legend .base { background: var(--sub); opacity: .6; }
+  .rs-ranges { display: inline-flex; gap: 3px; }.rs-range { padding: 3px 8px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--sub); font-family: var(--font-num); font-size: .7rem; font-weight: 700; cursor: pointer; }.rs-range:hover, .rs-range.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .rs-chart { height: 270px; }.rs-foot { display: flex; align-items: flex-start; gap: 5px; margin: 11px 0 0; color: var(--sub); font-size: .71rem; line-height: 1.5; }.rs-foot svg { flex: none; margin-top: 1px; color: var(--accent); }
+  @media (max-width: 620px) { .relative { padding: 16px; }.rs-head { flex-direction: column; }.rs-stats { grid-template-columns: 1fr 1fr; }.rs-stat.spread { grid-column: span 2; }.rs-chart { height: 230px; } }
+</style>

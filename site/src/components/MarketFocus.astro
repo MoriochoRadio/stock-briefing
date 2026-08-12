@@ -1,0 +1,213 @@
+---
+import intraday from "../data/intraday.json";
+import sentiment from "../data/sentiment.json";
+import { ArrowUpRight, BellRing, Bookmark, ChartNoAxesCombined, Radar, Sparkles, Star } from "@lucide/astro";
+
+const data = intraday as any;
+const snaps = data?.snapshots ?? [];
+const latest = snaps.length ? snaps[snaps.length - 1] : null;
+const stocks = latest?.stocks ?? [];
+const market = data?.market ?? null;
+const fng = (sentiment as any)?.fng ?? null;
+const usSemi = data?.us_semi?.stocks ?? [];
+
+const pct = (n: unknown, digits = 1) => typeof n === "number"
+  ? `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(digits)}%`
+  : "–";
+const tone = (n: unknown) => typeof n === "number" ? (n > 0 ? "up" : n < 0 ? "down" : "flat") : "flat";
+
+function signalOf(stock: any) {
+  const rsi = typeof stock.rsi14 === "number" ? stock.rsi14 : null;
+  if (stock.trend === "상승" && stock.macd_dir === "상승" && (rsi === null || rsi < 70)) {
+    return { label: "추세 우위", tone: "up", desc: "추세와 모멘텀이 같은 방향인지 확인" };
+  }
+  if ((rsi !== null && rsi >= 70) || stock.rsi_state === "과매수") {
+    return { label: "과열 점검", tone: "caution", desc: "상승 추세와 단기 과열을 분리해 관찰" };
+  }
+  if (stock.trend === "하락" && stock.macd_dir === "하락") {
+    return { label: "방어 관찰", tone: "down", desc: "추세 전환 전까지 변동성 우선 확인" };
+  }
+  return { label: "방향 확인", tone: "flat", desc: "추세와 모멘텀의 합류 여부를 관찰" };
+}
+
+const krCards = stocks.slice(0, 2).map((stock: any) => {
+  const signal = signalOf(stock);
+  return {
+    id: stock.ticker,
+    kicker: "K-SEMICON",
+    name: stock.name,
+    signal,
+    change: stock.change_pct,
+    details: [
+      `20일선 ${pct(stock.vs_sma20_pct)}`,
+      `RSI ${typeof stock.rsi14 === "number" ? stock.rsi14.toFixed(0) : "–"}`,
+      `MACD ${stock.macd_dir ?? "–"}`,
+    ],
+    href: "#intraday",
+  };
+});
+
+const usAvg = usSemi.length
+  ? usSemi.reduce((sum: number, stock: any) => sum + (typeof stock.change_pct === "number" ? stock.change_pct : 0), 0) / usSemi.length
+  : null;
+const marketCard = {
+  id: "market-compass",
+  kicker: "MARKET COMPASS",
+  name: "시장 온도계",
+  signal: usAvg !== null && usAvg >= 0.4
+    ? { label: "반도체 강세", tone: "up", desc: "미국 반도체 평균 흐름과 국내 동행 여부 확인" }
+    : usAvg !== null && usAvg <= -0.4
+      ? { label: "반도체 약세", tone: "down", desc: "위험 회피가 국내에 전이되는지 확인" }
+      : { label: "혼조 구간", tone: "flat", desc: "방향보다 개별 종목의 상대 강도 확인" },
+  change: usAvg,
+  details: [
+    usAvg !== null ? `미국 반도체 평균 ${pct(usAvg)}` : "미국 반도체 데이터 대기",
+    market?.kospi ? `코스피 ${pct(market.kospi.change_pct)}` : "코스피 데이터 대기",
+    fng ? `미국 심리 ${fng.label} ${fng.score}` : "심리 지표 대기",
+  ],
+  href: "#charts",
+};
+const cards = [...krCards, marketCard];
+const asOf = latest ? `${latest.label} ${latest.time} KST` : "최신 스냅샷 대기";
+---
+
+{cards.length > 0 && (
+  <section class="focus-shell" id="focus" aria-label="시장 포커스" data-reveal>
+    <header class="focus-head">
+      <div>
+        <p class="focus-cap"><Radar size={14} /> MARKET FOCUS</p>
+        <h2>오늘, 먼저 볼 관찰 신호</h2>
+        <p>시세·기술 지표·시장 온도를 한 화면에 묶었습니다. <b>매매 신호가 아닌 관찰 우선순위</b>입니다.</p>
+      </div>
+      <div class="focus-actions">
+        <button class="focus-filter" type="button" aria-pressed="false" data-focus-filter>
+          <Bookmark size={14} /> 나의 고정 종목만
+        </button>
+        <a href="#intraday" class="focus-link">장중 해설 <ArrowUpRight size={14} /></a>
+      </div>
+    </header>
+
+    <div class="focus-grid">
+      {cards.map((card, i) => (
+        <article class:list={["focus-card", card.signal.tone]} data-focus-card data-ticker={card.id} style={`--i:${i}`}>
+          <div class="focus-card-top">
+            <span class="focus-kicker">{card.kicker}</span>
+            {card.id !== "market-compass" && (
+              <button class="pin" type="button" data-pin={card.id} aria-label={`${card.name} 고정 종목에 추가`} aria-pressed="false" title="고정 종목에 추가">
+                <Star size={15} />
+              </button>
+            )}
+          </div>
+          <div class="focus-title-row">
+            <h3>{card.name}</h3>
+            {typeof card.change === "number" && <strong class={tone(card.change)}>{pct(card.change)}</strong>}
+          </div>
+          <p class="focus-signal"><Sparkles size={14} /> <b>{card.signal.label}</b><span>{card.signal.desc}</span></p>
+          <ul class="focus-detail">
+            {card.details.map((detail) => <li>{detail}</li>)}
+          </ul>
+          <a href={card.href} class="focus-more">세부 데이터 보기 <ChartNoAxesCombined size={14} /></a>
+        </article>
+      ))}
+    </div>
+
+    <footer class="focus-foot">
+      <BellRing size={14} /> <span>{asOf} 기준 · 별표를 누르면 이 브라우저에만 고정 종목이 저장됩니다.</span>
+    </footer>
+  </section>
+)}
+
+<script>
+  const storageKey = "stock-briefing:pinned-tickers";
+  const cards = Array.from(document.querySelectorAll<HTMLElement>("[data-focus-card]"));
+  const pins = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-pin]"));
+  const filter = document.querySelector<HTMLButtonElement>("[data-focus-filter]");
+
+  let pinned = new Set<string>();
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const saved = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(saved)) pinned = new Set(saved.filter((value) => typeof value === "string"));
+  } catch (_) {}
+
+  const persist = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify([...pinned])); } catch (_) {}
+  };
+  const syncPins = () => {
+    pins.forEach((button) => {
+      const on = pinned.has(button.dataset.pin ?? "");
+      button.setAttribute("aria-pressed", String(on));
+      button.setAttribute("aria-label", on ? "고정 종목에서 제거" : "고정 종목에 추가");
+      button.title = on ? "고정 종목에서 제거" : "고정 종목에 추가";
+      button.classList.toggle("is-pinned", on);
+    });
+  };
+  const syncFilter = () => {
+    const active = filter?.getAttribute("aria-pressed") === "true";
+    cards.forEach((card) => {
+      const ticker = card.dataset.ticker ?? "";
+      card.hidden = Boolean(active && ticker !== "market-compass" && !pinned.has(ticker));
+    });
+  };
+
+  pins.forEach((button) => button.addEventListener("click", () => {
+    const ticker = button.dataset.pin;
+    if (!ticker) return;
+    if (pinned.has(ticker)) pinned.delete(ticker); else pinned.add(ticker);
+    persist(); syncPins(); syncFilter();
+  }));
+  filter?.addEventListener("click", () => {
+    const next = filter.getAttribute("aria-pressed") !== "true";
+    filter.setAttribute("aria-pressed", String(next));
+    syncFilter();
+  });
+  syncPins(); syncFilter();
+</script>
+
+<style>
+  .focus-shell {
+    position: relative; overflow: hidden; margin: 16px 0 24px; padding: 22px;
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: calc(var(--radius) + 2px);
+    background:
+      radial-gradient(80% 120% at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%),
+      radial-gradient(65% 100% at 100% 100%, color-mix(in srgb, var(--down) 10%, transparent), transparent 58%),
+      var(--card);
+    box-shadow: inset 0 1px 0 var(--hairline), var(--shadow);
+  }
+  .focus-shell::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .55; background-image: linear-gradient(color-mix(in srgb, var(--border) 48%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--border) 48%, transparent) 1px, transparent 1px); background-size: 26px 26px; mask-image: linear-gradient(to bottom, #000, transparent 82%); }
+  .focus-head, .focus-grid, .focus-foot { position: relative; z-index: 1; }
+  .focus-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+  .focus-cap { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; color: var(--accent); font-family: var(--font-num); font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+  .focus-head h2 { margin: 0; font-size: clamp(1.18rem, 2.5vw, 1.42rem); letter-spacing: -.03em; }
+  .focus-head p:not(.focus-cap) { max-width: 60ch; margin: 7px 0 0; color: var(--sub); font-size: .84rem; line-height: 1.65; }
+  .focus-head p b { color: var(--text); font-weight: 700; }
+  .focus-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+  .focus-filter, .focus-link { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; color: var(--sub); background: color-mix(in srgb, var(--bg) 25%, transparent); font-size: .75rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+  .focus-filter[aria-pressed="true"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .focus-link:hover, .focus-filter:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .focus-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .focus-card { min-width: 0; display: flex; flex-direction: column; padding: 15px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--card) 80%, var(--bg)); box-shadow: inset 0 1px 0 var(--hairline); }
+  .focus-card.up { border-color: color-mix(in srgb, var(--up) 35%, var(--border)); }
+  .focus-card.down { border-color: color-mix(in srgb, var(--down) 35%, var(--border)); }
+  .focus-card.caution { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .focus-card-top, .focus-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .focus-kicker { font-family: var(--font-num); color: var(--sub); font-size: .63rem; font-weight: 800; letter-spacing: .1em; }
+  .pin { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 8px; color: var(--sub); background: transparent; cursor: pointer; }
+  .pin:hover, .pin.is-pinned { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .pin.is-pinned svg { fill: currentColor; }
+  .focus-title-row { margin-top: 8px; }
+  .focus-title-row h3 { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
+  .focus-title-row strong { font-family: var(--font-num); font-size: .92rem; font-variant-numeric: tabular-nums; }
+  .focus-title-row strong.up { color: var(--up); }.focus-title-row strong.down { color: var(--down); }.focus-title-row strong.flat { color: var(--sub); }
+  .focus-signal { display: grid; grid-template-columns: auto auto 1fr; align-items: start; gap: 5px; margin: 11px 0; color: var(--sub); font-size: .75rem; line-height: 1.45; }
+  .focus-signal svg { margin-top: 1px; color: var(--accent); }.focus-signal b { color: var(--text); white-space: nowrap; }
+  .focus-detail { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+  .focus-detail li { padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px; color: var(--sub); font-family: var(--font-num); font-size: .66rem; font-variant-numeric: tabular-nums; }
+  .focus-more { display: inline-flex; align-items: center; gap: 5px; width: fit-content; margin-top: auto; padding-top: 14px; color: var(--accent); font-size: .74rem; font-weight: 800; text-decoration: none; }
+  .focus-more:hover { text-decoration: underline; }.focus-more svg { transition: transform .15s ease; }.focus-more:hover svg { transform: translate(2px,-2px); }
+  .focus-foot { display: flex; align-items: center; gap: 6px; margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--border); color: var(--sub); font-size: .71rem; }
+  .focus-foot svg { flex: none; color: var(--accent); }
+  @media (max-width: 760px) { .focus-head { flex-direction: column; }.focus-actions { justify-content: flex-start; }.focus-grid { grid-template-columns: 1fr; }.focus-card { min-height: 0; }.focus-more { margin-top: 12px; } }
+  @media (max-width: 460px) { .focus-shell { padding: 17px; }.focus-actions { width: 100%; }.focus-filter, .focus-link { flex: 1; justify-content: center; }.focus-foot { align-items: flex-start; } }
+  @media (prefers-reduced-motion: reduce) { .focus-more svg { transition: none; } }
+</style>

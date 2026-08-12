@@ -34,6 +34,8 @@ Tracks the US and Korean stock markets **all day long**, automatically generatin
 - **Data-status panel** — surfaces collection time, actual quote dates, watchlist coverage, and possible delay on both Home and Dashboard, so prior-session prices are not presented as current data during holidays or delayed runs
 - **Verifiable briefing** — stable evidence IDs are assigned to collected headlines; only citations actually used by the LLM are rendered as clickable entries in the `Article evidence` section
 - Plus — today's briefing, key headlines, market mood (Fear & Greed Index), watchlist quote cards, index charts
+- **Market Focus** — a three-card observation console immediately below the hero, combining Korean semiconductor indicators, US semiconductor context, and market sentiment. Starred tickers are stored only in the local browser and can be filtered instantly
+- **Semiconductor Relative Strength** — normalizes Samsung Electronics and SK hynix to the same 100-point baseline for accurate 1M, 3M, 6M, and 1Y performance comparison
 - **Dashboard** (`/dashboard`) — bento grid, sector heatmap · **Archive** — past briefings by date
 
 ## How It Works

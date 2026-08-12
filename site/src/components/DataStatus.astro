@@ -1,6 +1,7 @@
 ---
 import quality from "../data/quality.json";
 import intraday from "../data/intraday.json";
+import history from "../data/history.json";
 import { BadgeCheck, Clock3, Database, ShieldAlert } from "@lucide/astro";
 
 const q = quality as any;
@@ -14,15 +15,31 @@ const intradayQuality = intradayData.dataQuality ?? (latestSnap ? {
   delayed: Boolean(latestSnap.delayed),
 } : null);
 const groups = q.groups ?? {};
-const us = groups.watchlist_us;
-const kr = groups.watchlist_kr;
+const latestHistory = (history as any[]).at(-1) ?? null;
+const historicalQuotes = latestHistory?.quotes ?? [];
+const legacyGroup = (label: string, quotes: any[]) => quotes.length ? {
+  label,
+  received: quotes.length,
+  expected: null,
+  coveragePct: null,
+  asOfDates: [...new Set(quotes.map((quote) => quote.date).filter(Boolean))],
+  status: "legacy",
+  legacy: true,
+} : null;
+// quality.json은 다음 정기 수집부터 완전성 기준을 제공한다. 배포 직후에는 기존
+// history.json에서 확인 가능한 범위만 보수적으로 표시해 빈 칸이나 허위 완료 상태를 피한다.
+const us = groups.watchlist_us ?? legacyGroup("미국 관심종목", historicalQuotes.filter((quote) => {
+  const ticker = String(quote.ticker ?? "");
+  return !ticker.startsWith("^") && !ticker.endsWith(".KS") && ticker !== "KRW=X";
+}));
+const kr = groups.watchlist_kr ?? legacyGroup("한국 관심종목", historicalQuotes.filter((quote) => String(quote.ticker ?? "").endsWith(".KS")));
 const asOf = intradayData.updated_kst || q.generatedAt || "아직 수집 기록 없음";
 const quoteDates = [...new Set([
   ...(us?.asOfDates ?? []),
   ...(kr?.asOfDates ?? []),
   ...(intradayQuality?.primaryAsOfDates ?? []),
 ])].filter(Boolean);
-const hasDailyQuality = Object.keys(groups).length > 0;
+const hasDailyQuality = Object.keys(groups).length > 0 || Boolean(latestHistory);
 const hasPartial = !hasDailyQuality || [us, kr].some((group) => group?.status === "partial") || Boolean(intradayQuality && intradayQuality.primaryReceived < intradayQuality.primaryExpected);
 const isDelayed = Boolean(intradayQuality?.delayed);
 const state = isDelayed ? "지연 시세" : hasPartial ? "일부 수집" : "수집 완료";
@@ -46,13 +63,13 @@ const pct = (value) => Number.isFinite(value) ? `${Number(value).toFixed(value %
   <div class="status-grid">
     <div class="metric">
       <span>미국 관심종목</span>
-      <strong>{us ? `${us.received}/${us.expected}` : "–"}</strong>
-      <small>{us ? `수집 완전성 ${pct(us.coveragePct)}` : "다음 수집 후 표시"}</small>
+      <strong>{us ? (us.legacy ? `${us.received}건` : `${us.received}/${us.expected}`) : "–"}</strong>
+      <small>{us ? (us.legacy ? "기존 수집 시세 기준" : `수집 완전성 ${pct(us.coveragePct)}`) : "다음 수집 후 표시"}</small>
     </div>
     <div class="metric">
       <span>한국 관심종목</span>
-      <strong>{kr ? `${kr.received}/${kr.expected}` : "–"}</strong>
-      <small>{kr ? `수집 완전성 ${pct(kr.coveragePct)}` : "다음 수집 후 표시"}</small>
+      <strong>{kr ? (kr.legacy ? `${kr.received}건` : `${kr.received}/${kr.expected}`) : "–"}</strong>
+      <small>{kr ? (kr.legacy ? "기존 수집 시세 기준" : `수집 완전성 ${pct(kr.coveragePct)}`) : "다음 수집 후 표시"}</small>
     </div>
     <div class="metric">
       <span>한국장 스냅샷</span>
