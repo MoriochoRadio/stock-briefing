@@ -1,0 +1,135 @@
+---
+import historyData from "../data/history.json";
+import { ArrowLeftRight, CalendarRange, ChartNoAxesCombined, History, Sparkles } from "@lucide/astro";
+
+const history = (historyData as any[]).filter((entry) => entry?.date && Array.isArray(entry?.quotes)).sort((left, right) => left.date.localeCompare(right.date));
+const tracked = [
+  { ticker: "^KS11", label: "코스피", group: "국내 시장", tone: "violet" },
+  { ticker: "^IXIC", label: "나스닥", group: "미국 시장", tone: "blue" },
+  { ticker: "NVDA", label: "엔비디아", group: "AI 컴퓨팅", tone: "purple" },
+  { ticker: "MU", label: "마이크론", group: "글로벌 메모리", tone: "amber" },
+  { ticker: "005930.KS", label: "삼성전자", group: "국내 메모리", tone: "rose" },
+  { ticker: "000660.KS", label: "SK하이닉스", group: "국내 메모리", tone: "teal" },
+];
+const options = history.slice(-35);
+const defaultEnd = options.at(-1);
+const defaultStart = options.at(-6) ?? options[0];
+const byTicker = (snapshot: any) => new Map((snapshot?.quotes ?? []).map((quote: any) => [quote.ticker, quote]));
+const pct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+const delta = (ticker: string, start: any, end: any) => {
+  const first = byTicker(start).get(ticker)?.close;
+  const last = byTicker(end).get(ticker)?.close;
+  return Number.isFinite(first) && Number.isFinite(last) && first !== 0 ? ((last / first) - 1) * 100 : null;
+};
+const initial = tracked.map((item) => ({ ...item, change: delta(item.ticker, defaultStart, defaultEnd) }));
+const strongest = [...initial].filter((item) => item.change !== null).sort((left, right) => (right.change ?? -Infinity) - (left.change ?? -Infinity))[0];
+// 브라우저용 비교 payload에는 날짜별 종가만 전달하며, 서버에는 개인 선택값을 저장하지 않는다.
+const payload = options.map((snapshot) => ({
+  date: snapshot.date,
+  quotes: Object.fromEntries((snapshot.quotes ?? []).filter((quote: any) => tracked.some((item) => item.ticker === quote.ticker)).map((quote: any) => [quote.ticker, { close: quote.close, asOf: quote.date }])),
+}));
+---
+
+{options.length >= 2 && (
+  <section class="archive-replay" data-archive-replay data-reveal aria-labelledby="archive-replay-title">
+    <div class="eyebrow"><span class="tag">REVIEW</span> 기록 비교 <span class="line"></span></div>
+    <section class="archive-replay-card card">
+      <header class="archive-replay-head">
+        <div>
+          <p class="archive-replay-cap"><History size={14} /> MARKET RECORD REVIEW</p>
+          <h2 id="archive-replay-title">두 날짜 사이, 시장은 어떻게 달라졌나</h2>
+          <p>수집된 날짜별 종가를 직접 비교해 시장·AI 컴퓨팅·메모리 종목의 가격 변화를 되짚습니다. <b>브리핑의 해석과 실제 가격 기록을 분리</b>해 확인하는 회고 도구입니다.</p>
+        </div>
+        <div class="archive-replay-badge" data-archive-leader><Sparkles size={14} /> {strongest ? `${strongest.label} 변화폭 상위` : "데이터 대기"}</div>
+      </header>
+
+      <div class="archive-controls" aria-label="시장 기록 비교 기간">
+        <label>시작 기록
+          <select data-archive-start>
+            {options.map((item) => <option value={item.date} selected={item.date === defaultStart.date}>{item.date}</option>)}
+          </select>
+        </label>
+        <div class="archive-control-arrow" aria-hidden="true"><ArrowLeftRight size={17} /></div>
+        <label>종료 기록
+          <select data-archive-end>
+            {options.map((item) => <option value={item.date} selected={item.date === defaultEnd.date}>{item.date}</option>)}
+          </select>
+        </label>
+        <div class="archive-span"><CalendarRange size={14} /><strong data-archive-span>{Math.max(0, options.findIndex((item) => item.date === defaultEnd.date) - options.findIndex((item) => item.date === defaultStart.date))}개 기록 간격</strong><small>수집일 기준</small></div>
+      </div>
+
+      <div class="archive-replay-summary">
+        <div><span>비교 시작</span><strong data-archive-start-label>{defaultStart.date}</strong><small>수집 스냅샷</small></div>
+        <div><span>비교 종료</span><strong data-archive-end-label>{defaultEnd.date}</strong><small>수집 스냅샷</small></div>
+        <div><span>변화폭 상위</span><strong data-archive-summary-leader>{strongest?.label ?? "–"}</strong><small data-archive-summary-change>{strongest ? pct(strongest.change) : "–"}</small></div>
+      </div>
+
+      <div class="archive-compare-grid" aria-live="polite">
+        {initial.map((item) => (
+          <article class:list={["archive-compare-item", item.tone]} data-archive-item={item.ticker}>
+            <header><span>{item.label}</span><small>{item.group}</small></header>
+            <strong data-archive-change class={item.change !== null && item.change > 0 ? "up" : item.change !== null && item.change < 0 ? "down" : "flat"}>{pct(item.change)}</strong>
+            <footer><ChartNoAxesCombined size={12} /> <span data-archive-price>기록 비교 중</span></footer>
+          </article>
+        ))}
+      </div>
+      <p class="archive-replay-foot"><ArrowLeftRight size={13} /> 가격 변화는 두 수집 시점의 종가 비교이며, 거래일 수·배당·거래 비용·환율을 반영하지 않습니다. 이 도구는 과거 기록의 관찰을 위한 것이며 성과 예측이나 매매 권유가 아닙니다.</p>
+    </section>
+    <script type="application/json" id="archive-replay-data" set:html={JSON.stringify(payload)} />
+  </section>
+)}
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-archive-replay]");
+  const source = document.getElementById("archive-replay-data");
+  if (root && source) {
+    const data = JSON.parse(source.textContent ?? "[]");
+    const startSelect = root.querySelector<HTMLSelectElement>("[data-archive-start]");
+    const endSelect = root.querySelector<HTMLSelectElement>("[data-archive-end]");
+    const fmtPct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+    const fmtPrice = (value: number) => value.toLocaleString("ko-KR", { maximumFractionDigits: value >= 1000 ? 0 : 2 });
+    const render = () => {
+      const start = data.find((item: any) => item.date === startSelect?.value) ?? data[0];
+      const end = data.find((item: any) => item.date === endSelect?.value) ?? data.at(-1);
+      if (!start || !end) return;
+      if (data.findIndex((item: any) => item.date === start.date) > data.findIndex((item: any) => item.date === end.date)) {
+        if (endSelect) endSelect.value = start.date;
+        return render();
+      }
+      const changes: Array<{ ticker: string; label: string; value: number | null }> = [];
+      root.querySelectorAll<HTMLElement>("[data-archive-item]").forEach((card) => {
+        const ticker = card.dataset.archiveItem ?? "";
+        const first = start.quotes?.[ticker]?.close;
+        const last = end.quotes?.[ticker]?.close;
+        const value = typeof first === "number" && typeof last === "number" && first !== 0 ? ((last / first) - 1) * 100 : null;
+        const label = card.querySelector("header span")?.textContent?.trim() ?? ticker;
+        changes.push({ ticker, label, value });
+        const change = card.querySelector<HTMLElement>("[data-archive-change]");
+        const price = card.querySelector<HTMLElement>("[data-archive-price]");
+        if (change) { change.textContent = fmtPct(value); change.className = value !== null && value > 0 ? "up" : value !== null && value < 0 ? "down" : "flat"; }
+        if (price) price.textContent = typeof first === "number" && typeof last === "number" ? `${fmtPrice(first)} → ${fmtPrice(last)}` : "비교 데이터 부족";
+      });
+      const indexGap = Math.max(0, data.findIndex((item: any) => item.date === end.date) - data.findIndex((item: any) => item.date === start.date));
+      const best = changes.filter((item) => item.value !== null).sort((left, right) => (right.value ?? -Infinity) - (left.value ?? -Infinity))[0];
+      const setText = (selector: string, text: string) => { const element = root.querySelector<HTMLElement>(selector); if (element) element.textContent = text; };
+      setText("[data-archive-span]", `${indexGap}개 기록 간격`);
+      setText("[data-archive-start-label]", start.date);
+      setText("[data-archive-end-label]", end.date);
+      setText("[data-archive-summary-leader]", best?.label ?? "–");
+      setText("[data-archive-summary-change]", fmtPct(best?.value ?? null));
+      const badge = root.querySelector<HTMLElement>("[data-archive-leader]");
+      if (badge) badge.childNodes[1] && (badge.childNodes[1].textContent = best ? ` ${best.label} 변화폭 상위` : " 데이터 대기");
+    };
+    startSelect?.addEventListener("change", render);
+    endSelect?.addEventListener("change", render);
+    render();
+  }
+</script>
+
+<style>
+  .archive-replay { margin:20px 0 30px; }.archive-replay-card { padding:20px; overflow:hidden; background:linear-gradient(142deg,color-mix(in srgb,var(--card) 92%,#8e63ef 8%),var(--card)); }.archive-replay-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.archive-replay-cap { display:inline-flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.67rem; font-weight:800; letter-spacing:.11em; }.archive-replay-head h2 { margin:0; font-size:1.16rem; letter-spacing:-.025em; }.archive-replay-head p:not(.archive-replay-cap) { max-width:61ch; margin:6px 0 0; color:var(--sub); font-size:.82rem; line-height:1.6; }.archive-replay-head p b { color:var(--text); }.archive-replay-badge { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 10px; border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); border-radius:999px; color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,transparent); font-size:.74rem; font-weight:800; }
+  .archive-controls { display:grid; grid-template-columns:1fr 30px 1fr auto; align-items:end; gap:10px; margin:17px 0 12px; padding:12px; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb,var(--bg) 24%,var(--card)); }.archive-controls label { display:grid; gap:5px; color:var(--sub); font-size:.69rem; font-weight:700; }.archive-controls select { height:34px; padding:0 8px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--card); font-family:var(--font-num); font-size:.76rem; }.archive-controls select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }.archive-control-arrow { display:grid; place-items:center; height:34px; color:var(--accent); }.archive-span { display:grid; grid-template-columns:auto 1fr; column-gap:5px; align-items:center; min-height:34px; padding:0 9px; border-left:1px solid var(--border); color:var(--sub); font-size:.65rem; }.archive-span svg { grid-row:span 2; color:var(--accent); }.archive-span strong { color:var(--text); font-family:var(--font-num); font-size:.72rem; }.archive-span small { font-size:.61rem; }
+  .archive-replay-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; margin:0 0 12px; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--border); }.archive-replay-summary div { padding:11px 13px; background:var(--card); }.archive-replay-summary span,.archive-replay-summary small { display:block; color:var(--sub); font-size:.67rem; }.archive-replay-summary strong { display:block; margin:3px 0; color:var(--text); font-family:var(--font-num); font-size:.96rem; }.archive-compare-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }.archive-compare-item { position:relative; padding:12px; overflow:hidden; border:1px solid var(--border); border-top:3px solid var(--tone); border-radius:10px; background:color-mix(in srgb,var(--card) 92%,var(--bg)); }.archive-compare-item.violet { --tone:#8e63ef; }.archive-compare-item.blue { --tone:#3a82e0; }.archive-compare-item.purple { --tone:#9b65e5; }.archive-compare-item.amber { --tone:#d59121; }.archive-compare-item.rose { --tone:#e0475e; }.archive-compare-item.teal { --tone:#28a997; }.archive-compare-item header { display:flex; align-items:baseline; justify-content:space-between; gap:6px; }.archive-compare-item header span { color:var(--text); font-size:.77rem; font-weight:800; }.archive-compare-item header small { color:var(--sub); font-size:.58rem; text-align:right; }.archive-compare-item > strong { display:block; margin:7px 0; font-family:var(--font-num); font-size:1.08rem; }.archive-compare-item footer { display:flex; align-items:center; gap:4px; padding-top:7px; border-top:1px solid var(--border); color:var(--sub); font-family:var(--font-num); font-size:.62rem; white-space:nowrap; overflow:hidden; }.archive-compare-item footer span { overflow:hidden; text-overflow:ellipsis; }.archive-compare-item footer svg { flex:none; color:var(--accent); }.up { color:var(--up)!important; }.down { color:var(--down)!important; }.flat { color:var(--sub)!important; }.archive-replay-foot { display:flex; align-items:flex-start; gap:5px; margin:12px 0 0; color:var(--sub); font-size:.7rem; line-height:1.5; }.archive-replay-foot svg { flex:none; margin-top:1px; color:var(--accent); }
+  @media (max-width:720px) { .archive-replay-card { padding:16px; }.archive-replay-head { flex-direction:column; }.archive-controls { grid-template-columns:1fr 24px 1fr; }.archive-span { grid-column:span 3; border-top:1px solid var(--border); border-left:0; padding:8px 0 0; }.archive-compare-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:430px) { .archive-controls { grid-template-columns:1fr; }.archive-control-arrow { transform:rotate(90deg); }.archive-span { grid-column:auto; }.archive-replay-summary { grid-template-columns:1fr; }.archive-compare-grid { grid-template-columns:1fr; } }
+</style>

@@ -39,6 +39,7 @@ Tracks the US and Korean stock markets **all day long**, automatically generatin
 - **My Observation Desk** — saves up to eight tracked tickers from the collected universe in the browser only, comparing 5, 10, or 20-record performance against a user-set daily-move observation threshold. It uses no account, personal data collection, or push notification service
 - **Market Replay** — normalizes AI-compute, memory, manufacturing, and equipment ticker groups to a 100-point period baseline for 1M, 3M, 6M, and 1Y relative price-move comparison
 - **Ecosystem Pulse** — compares daily moves across US AI, manufacturing/equipment, global memory, and Korean memory groups. Connecting lines are an observation path rather than a causal claim, and averages include collected tickers only
+- **Archive Market Record Review** — lets users select any two collected dates in the archive to compare closing-price changes and the largest move across KOSPI, Nasdaq, AI compute, and memory names, separating briefing narrative from recorded prices
 - **Dashboard** (`/dashboard`) — bento grid, sector heatmap · **Archive** — past briefings by date
 
 ## How It Works
