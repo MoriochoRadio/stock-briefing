@@ -1,0 +1,186 @@
+---
+import historyData from "../data/history.json";
+import { BellRing, BookmarkCheck, ChartNoAxesCombined, RotateCcw, SlidersHorizontal, Sparkles, Target } from "@lucide/astro";
+
+const history = historyData as any[];
+const latest = history.at(-1) ?? null;
+const quotes = (latest?.quotes ?? []).filter((quote: any) => typeof quote?.close === "number" && quote?.ticker && quote?.name);
+const DEFAULT_TICKERS = ["005930.KS", "000660.KS", "NVDA"];
+
+// 브라우저에서는 날짜별 종가만 사용해 개인 관찰 기간 성과를 계산한다.
+// 원본 수집 데이터 외의 값이나 예측값은 생성하지 않는다.
+const seriesPayload = history.map((snap: any) => ({
+  date: snap.date,
+  quotes: Object.fromEntries((snap.quotes ?? [])
+    .filter((quote: any) => typeof quote?.close === "number" && quote?.ticker)
+    .map((quote: any) => [quote.ticker, quote.close])),
+}));
+const fmtNum = (value: number) => value.toLocaleString("ko-KR", { maximumFractionDigits: value >= 1000 ? 0 : 2 });
+const fmtPct = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(2)}%`;
+---
+
+{quotes.length > 0 && (
+  <section class="workspace" id="workspace" data-workspace data-reveal aria-labelledby="workspace-title">
+    <header class="workspace-head">
+      <div>
+        <p class="workspace-cap"><Target size={14} /> PERSONAL WORKSPACE</p>
+        <h2 id="workspace-title">나의 관찰 데스크</h2>
+        <p>관심 종목과 변동폭 기준을 직접 정하고, 수집된 과거 기록에서 기간 성과를 비교하세요. 설정은 <b>이 브라우저에만 저장</b>됩니다.</p>
+      </div>
+      <div class="workspace-status"><BookmarkCheck size={15} /> <span data-ws-count>기본 3종목</span></div>
+    </header>
+
+    <div class="workspace-control card">
+      <div class="control-title"><SlidersHorizontal size={15} /><span>관찰 규칙</span><small>알림을 보내지 않으며, 화면에서만 관찰 신호를 표시합니다.</small></div>
+      <div class="control-grid">
+        <label class="select-field">기록 비교 기간
+          <select data-ws-period aria-label="기록 비교 기간">
+            <option value="5">최근 5개 기록</option>
+            <option value="10">최근 10개 기록</option>
+            <option value="20">최근 20개 기록</option>
+          </select>
+        </label>
+        <label class="range-field" for="ws-threshold">당일 변동폭 관찰 기준
+          <span><input id="ws-threshold" data-ws-threshold type="range" min="1" max="8" step="0.5" value="3" /><output data-ws-threshold-output>±3.0%</output></span>
+        </label>
+        <button type="button" class="reset-button" data-ws-reset><RotateCcw size={14} /> 기본값 복원</button>
+      </div>
+    </div>
+
+    <div class="ticker-picker" role="group" aria-label="관찰 종목 선택">
+      {quotes.map((quote: any) => (
+        <button type="button" class="ticker-option" data-ws-ticker={quote.ticker} aria-pressed={DEFAULT_TICKERS.includes(quote.ticker) ? "true" : "false"}>
+          <span>{quote.name}</span><small>{quote.ticker.replace(".KS", "")}</small>
+        </button>
+      ))}
+    </div>
+
+    <div class="workspace-summary">
+      <div><span>현재 기록</span><strong>{latest.date}</strong></div>
+      <p><Sparkles size={14} /> 기간 성과는 선택 기간 전후의 <b>수집 종가</b>를 비교합니다. 공휴일·주말의 중복 기록은 같은 가격으로 나타날 수 있습니다.</p>
+    </div>
+
+    <div class="workspace-grid" data-ws-grid aria-live="polite">
+      {quotes.map((quote: any) => (
+        <article class="workspace-card" data-ws-card data-ticker={quote.ticker} data-change={quote.change_pct} hidden={!DEFAULT_TICKERS.includes(quote.ticker)}>
+          <div class="ws-card-head">
+            <div><span class="ws-name">{quote.name}</span><small>{quote.ticker}</small></div>
+            <strong class={quote.change_pct > 0 ? "up" : quote.change_pct < 0 ? "down" : "flat"}>{fmtPct(quote.change_pct)}</strong>
+          </div>
+          <p class="ws-close">{fmtNum(quote.close)}</p>
+          <div class="ws-metrics">
+            <span>기간 성과 <b data-ws-return>계산 중</b></span>
+            <span>기준일 <b data-ws-asof>{quote.date ?? latest.date}</b></span>
+          </div>
+          <p class="ws-alert" data-ws-alert><BellRing size={14} /> 규칙 계산 중</p>
+        </article>
+      ))}
+    </div>
+    <p class="workspace-empty" data-ws-empty hidden>선택한 관찰 종목이 없습니다. 위의 종목 버튼을 눌러 데스크에 추가하세요.</p>
+    <footer class="workspace-foot"><ChartNoAxesCombined size={14} /> 수익률·변동폭 표시는 분석용 정보이며, 매수·매도 권유나 자동 알림이 아닙니다.</footer>
+    <script type="application/json" id="workspace-history" set:html={JSON.stringify(seriesPayload)} />
+  </section>
+)}
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-workspace]");
+  const source = document.getElementById("workspace-history");
+  if (root && source) {
+    const history = JSON.parse(source.textContent ?? "[]");
+    const storageKey = "stock-briefing:workspace-v1";
+    const legacyKey = "stock-briefing:pinned-tickers";
+    const defaults = { tickers: ["005930.KS", "000660.KS", "NVDA"], period: 5, threshold: 3 };
+    const knownTickers = Array.from(root.querySelectorAll<HTMLElement>("[data-ws-ticker]")).map((el) => el.dataset.wsTicker ?? "").filter(Boolean);
+    let state = { ...defaults };
+
+    const safeState = (candidate: any) => {
+      const unique = Array.isArray(candidate?.tickers) ? [...new Set(candidate.tickers.filter((ticker: any) => typeof ticker === "string" && knownTickers.includes(ticker)))].slice(0, 8) : [];
+      const period = [5, 10, 20].includes(Number(candidate?.period)) ? Number(candidate.period) : defaults.period;
+      const threshold = Math.min(8, Math.max(1, Number(candidate?.threshold) || defaults.threshold));
+      return { tickers: unique.length ? unique : defaults.tickers.filter((ticker) => knownTickers.includes(ticker)), period, threshold };
+    };
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) state = safeState(JSON.parse(saved));
+      else {
+        const legacy = JSON.parse(localStorage.getItem(legacyKey) ?? "[]");
+        if (Array.isArray(legacy) && legacy.length) state = safeState({ ...defaults, tickers: [...legacy, ...defaults.tickers] });
+      }
+    } catch (_) {}
+
+    const pct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+    const dataFor = (ticker: string) => history.map((point: any) => ({ date: point.date, close: point.quotes?.[ticker] }))
+      .filter((point: any) => typeof point.close === "number");
+    const returnFor = (ticker: string, records: number) => {
+      const points = dataFor(ticker);
+      if (points.length < 2) return { change: null, asOf: null };
+      const end = points[points.length - 1];
+      const start = points[Math.max(0, points.length - records - 1)];
+      return { change: start.close ? ((end.close / start.close) - 1) * 100 : null, asOf: start.date };
+    };
+    const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) {} };
+    const render = () => {
+      const thresholdInput = root.querySelector<HTMLInputElement>("[data-ws-threshold]");
+      const periodInput = root.querySelector<HTMLSelectElement>("[data-ws-period]");
+      const thresholdOut = root.querySelector<HTMLOutputElement>("[data-ws-threshold-output]");
+      if (thresholdInput) thresholdInput.value = String(state.threshold);
+      if (periodInput) periodInput.value = String(state.period);
+      if (thresholdOut) thresholdOut.value = `±${state.threshold.toFixed(1)}%`;
+      root.querySelectorAll<HTMLButtonElement>("[data-ws-ticker]").forEach((button) => {
+        const active = state.tickers.includes(button.dataset.wsTicker ?? "");
+        button.setAttribute("aria-pressed", String(active));
+      });
+      root.querySelectorAll<HTMLElement>("[data-ws-card]").forEach((card) => {
+        const ticker = card.dataset.ticker ?? "";
+        const active = state.tickers.includes(ticker);
+        card.hidden = !active;
+        if (!active) return;
+        const daily = Number(card.dataset.change);
+        const record = returnFor(ticker, state.period);
+        const ret = card.querySelector<HTMLElement>("[data-ws-return]");
+        const asOf = card.querySelector<HTMLElement>("[data-ws-asof]");
+        const alert = card.querySelector<HTMLElement>("[data-ws-alert]");
+        if (ret) { ret.textContent = pct(record.change); ret.className = record.change !== null && record.change > 0 ? "up" : record.change !== null && record.change < 0 ? "down" : "flat"; }
+        if (asOf) asOf.textContent = record.asOf ?? "기록 부족";
+        if (alert) {
+          const hit = Number.isFinite(daily) && Math.abs(daily) >= state.threshold;
+          const direction = daily > 0 ? "상승" : daily < 0 ? "하락" : "변동 없음";
+          alert.className = `ws-alert ${hit ? (daily > 0 ? "up" : "down") : "flat"}`;
+          alert.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>${hit ? `당일 ${direction} 폭 ${Math.abs(daily).toFixed(1)}% · 관찰 기준 충족` : `당일 변동폭 ${Number.isFinite(daily) ? Math.abs(daily).toFixed(1) : "–"}% · 기준 이내`}`;
+        }
+      });
+      const count = root.querySelector<HTMLElement>("[data-ws-count]");
+      if (count) count.textContent = `${state.tickers.length}종목 관찰 중`;
+      const empty = root.querySelector<HTMLElement>("[data-ws-empty]");
+      if (empty) empty.hidden = state.tickers.length > 0;
+    };
+
+    root.querySelectorAll<HTMLButtonElement>("[data-ws-ticker]").forEach((button) => button.addEventListener("click", () => {
+      const ticker = button.dataset.wsTicker;
+      if (!ticker) return;
+      if (state.tickers.includes(ticker)) state.tickers = state.tickers.filter((item) => item !== ticker);
+      else if (state.tickers.length < 8) state.tickers = [...state.tickers, ticker];
+      persist(); render();
+    }));
+    root.querySelector<HTMLSelectElement>("[data-ws-period]")?.addEventListener("change", (event) => {
+      state.period = Number((event.target as HTMLSelectElement).value); persist(); render();
+    });
+    root.querySelector<HTMLInputElement>("[data-ws-threshold]")?.addEventListener("input", (event) => {
+      state.threshold = Number((event.target as HTMLInputElement).value); persist(); render();
+    });
+    root.querySelector<HTMLButtonElement>("[data-ws-reset]")?.addEventListener("click", () => { state = { ...defaults }; persist(); render(); });
+    render();
+  }
+</script>
+
+<style>
+  .workspace { position: relative; margin: 18px 0 26px; padding: 22px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius: calc(var(--radius) + 2px); background: linear-gradient(130deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card) 58%, color-mix(in srgb, #3a82e0 10%, var(--card))); box-shadow: inset 0 1px 0 var(--hairline), var(--shadow); }
+  .workspace::after { content:""; position:absolute; inset:auto -30px -70px auto; width:240px; height:240px; border-radius:50%; background:radial-gradient(circle, color-mix(in srgb, var(--accent) 16%, transparent), transparent 68%); pointer-events:none; }.workspace > * { position:relative; z-index:1; }
+  .workspace-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }.workspace-cap { display:inline-flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.67rem; font-weight:800; letter-spacing:.12em; }.workspace h2 { margin:0; font-size:clamp(1.18rem,2.5vw,1.42rem); letter-spacing:-.03em; }.workspace-head p:not(.workspace-cap) { max-width:65ch; margin:7px 0 0; color:var(--sub); font-size:.83rem; line-height:1.65; }.workspace-head p b { color:var(--text); }.workspace-status { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 10px; border:1px solid color-mix(in srgb, var(--accent) 42%, var(--border)); border-radius:999px; color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); font-size:.74rem; font-weight:800; }
+  .workspace-control { padding:13px 15px; margin-bottom:10px; border-color:var(--border); background:color-mix(in srgb, var(--bg) 33%, var(--card)); }.control-title { display:flex; align-items:center; gap:6px; color:var(--text); font-size:.83rem; font-weight:800; }.control-title svg { color:var(--accent); }.control-title small { margin-left:auto; color:var(--sub); font-size:.69rem; font-weight:500; }.control-grid { display:grid; grid-template-columns:minmax(150px,.85fr) minmax(220px,1.35fr) auto; align-items:end; gap:13px; margin-top:10px; }.select-field,.range-field { display:grid; gap:5px; color:var(--sub); font-size:.71rem; font-weight:700; }.select-field select { height:34px; padding:0 8px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--card); font:inherit; }.range-field span { display:grid; grid-template-columns:1fr auto; align-items:center; gap:9px; }.range-field input { width:100%; accent-color:var(--accent); }.range-field output { min-width:42px; color:var(--accent); font-family:var(--font-num); font-size:.78rem; font-weight:800; text-align:right; }.reset-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; height:34px; padding:0 10px; border:1px solid var(--border); border-radius:8px; color:var(--sub); background:transparent; font-size:.72rem; font-weight:700; cursor:pointer; }.reset-button:hover { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 44%, var(--border)); }
+  .ticker-picker { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }.ticker-option { display:inline-flex; align-items:baseline; gap:5px; padding:6px 9px; border:1px solid var(--border); border-radius:999px; color:var(--sub); background:color-mix(in srgb, var(--card) 80%, transparent); font-size:.73rem; font-weight:700; cursor:pointer; }.ticker-option small { color:inherit; opacity:.72; font-family:var(--font-num); font-size:.62rem; }.ticker-option:hover,.ticker-option[aria-pressed="true"] { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 55%, var(--border)); background:color-mix(in srgb, var(--accent) 12%, transparent); }.ticker-option:focus-visible,.reset-button:focus-visible,.select-field select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .workspace-summary { display:flex; align-items:center; gap:12px; margin:12px 0 10px; padding:9px 11px; border-left:2px solid var(--accent); background:color-mix(in srgb, var(--accent) 6%, transparent); }.workspace-summary div { display:grid; gap:1px; min-width:92px; }.workspace-summary div span { color:var(--sub); font-size:.65rem; }.workspace-summary div strong { color:var(--text); font-family:var(--font-num); font-size:.8rem; }.workspace-summary p { display:flex; align-items:flex-start; gap:5px; margin:0; color:var(--sub); font-size:.71rem; line-height:1.5; }.workspace-summary svg { flex:none; margin-top:1px; color:var(--accent); }.workspace-summary p b { color:var(--text); }
+  .workspace-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(185px,1fr)); gap:9px; }.workspace-card { padding:14px; border:1px solid var(--border); border-radius:13px; background:color-mix(in srgb, var(--card) 90%, var(--bg)); box-shadow:inset 0 1px 0 var(--hairline); }.ws-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }.ws-card-head div { display:grid; gap:2px; }.ws-name { font-size:.9rem; font-weight:800; }.ws-card-head small { color:var(--sub); font-family:var(--font-num); font-size:.64rem; }.ws-card-head strong { font-family:var(--font-num); font-size:.82rem; }.up { color:var(--up)!important; }.down { color:var(--down)!important; }.flat { color:var(--sub)!important; }.ws-close { margin:8px 0 10px; color:var(--text); font-family:var(--font-num); font-size:1.2rem; font-weight:800; letter-spacing:-.02em; }.ws-metrics { display:grid; grid-template-columns:1fr 1fr; gap:5px; }.ws-metrics span { display:grid; gap:2px; padding:6px 7px; border:1px solid var(--border); border-radius:7px; color:var(--sub); font-size:.62rem; }.ws-metrics b { color:var(--text); font-family:var(--font-num); font-size:.74rem; }.ws-alert { display:flex; align-items:flex-start; gap:5px; margin:10px 0 0; padding-top:9px; border-top:1px solid var(--border); color:var(--sub); font-size:.69rem; font-weight:700; line-height:1.45; }.ws-alert svg { flex:none; margin-top:1px; }.workspace-empty { margin:10px 0 0; padding:14px; border:1px dashed var(--border); border-radius:10px; color:var(--sub); font-size:.8rem; text-align:center; }.workspace-foot { display:flex; align-items:flex-start; gap:5px; margin-top:12px; padding-top:11px; border-top:1px solid var(--border); color:var(--sub); font-size:.69rem; line-height:1.5; }.workspace-foot svg { flex:none; margin-top:1px; color:var(--accent); }
+  @media (max-width:720px) { .workspace { padding:17px; }.workspace-head { flex-direction:column; }.control-grid { grid-template-columns:1fr 1fr; }.range-field { grid-column:span 2; }.reset-button { grid-column:span 2; }.control-title { align-items:flex-start; }.control-title small { margin-left:0; }.workspace-summary { align-items:flex-start; flex-direction:column; gap:7px; }.workspace-summary div { display:flex; align-items:center; gap:7px; }.workspace-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:430px) { .workspace-grid { grid-template-columns:1fr; }.control-grid { grid-template-columns:1fr; }.range-field,.reset-button { grid-column:auto; }.workspace-status { align-self:flex-start; } }
+</style>

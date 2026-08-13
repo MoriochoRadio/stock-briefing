@@ -2,7 +2,7 @@
 import "../styles/global.css";
 import ChartModal from "../components/ChartModal.astro";
 import { base } from "../lib/base";
-import { TrendingUp, Archive, LayoutGrid, Radar, Sun, Moon } from "@lucide/astro";
+import { TrendingUp, Archive, LayoutGrid, Radar, SlidersHorizontal, Sun, Moon } from "@lucide/astro";
 
 const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
 const path = Astro.url.pathname;
@@ -59,7 +59,11 @@ const canonical = Astro.site ? new URL(path, Astro.site).href : null;
           아침 시장 브리핑
         </a>
         <div class="topbar-right">
-          <a href={`${base}#focus`} class:list={["nav-link", { active: path === base }]}>
+          <a href={`${base}#workspace`} class:list={["nav-link", { active: path === base }]}>
+            <SlidersHorizontal size={15} />
+            <span class="nav-label">데스크</span>
+          </a>
+          <a href={`${base}#focus`} class="nav-link">
             <Radar size={15} />
             <span class="nav-label">포커스</span>
           </a>
