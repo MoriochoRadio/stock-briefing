@@ -37,6 +37,8 @@ Tracks the US and Korean stock markets **all day long**, automatically generatin
 - **Market Focus** — a three-card observation console immediately below the hero, combining Korean semiconductor indicators, US semiconductor context, and market sentiment. Starred tickers are stored only in the local browser and can be filtered instantly
 - **Semiconductor Relative Strength** — normalizes Samsung Electronics and SK hynix to the same 100-point baseline for accurate 1M, 3M, 6M, and 1Y performance comparison
 - **My Observation Desk** — saves up to eight tracked tickers from the collected universe in the browser only, comparing 5, 10, or 20-record performance against a user-set daily-move observation threshold. It uses no account, personal data collection, or push notification service
+- **Market Replay** — normalizes AI-compute, memory, manufacturing, and equipment ticker groups to a 100-point period baseline for 1M, 3M, 6M, and 1Y relative price-move comparison
+- **Ecosystem Pulse** — compares daily moves across US AI, manufacturing/equipment, global memory, and Korean memory groups. Connecting lines are an observation path rather than a causal claim, and averages include collected tickers only
 - **Dashboard** (`/dashboard`) — bento grid, sector heatmap · **Archive** — past briefings by date
 
 ## How It Works

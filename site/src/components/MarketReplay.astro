@@ -1,0 +1,169 @@
+---
+import seriesData from "../data/series.json";
+import { ArrowLeftRight, ChartSpline, TrendingUp } from "@lucide/astro";
+
+const series = seriesData as Record<string, [string, number][]>;
+const GROUPS = [
+  { id: "compute", label: "AI 컴퓨팅", note: "NVDA · AMD", tickers: ["NVDA", "AMD"], color: "#8e63ef" },
+  { id: "memory", label: "메모리", note: "삼성전자 · SK하이닉스 · MU", tickers: ["005930.KS", "000660.KS", "MU"], color: "#e0475e" },
+  { id: "manufacturing", label: "제조·장비", note: "TSMC · ASML", tickers: ["TSM", "ASML"], color: "#28a997" },
+];
+const PERIODS = [
+  { id: "1M", months: 1 },
+  { id: "3M", months: 3 },
+  { id: "6M", months: 6 },
+  { id: "1Y", months: 12 },
+];
+
+function endDateFor(tickers: string[]) {
+  return tickers.flatMap((ticker) => series[ticker] ?? []).map(([date]) => date).sort().at(-1) ?? "";
+}
+function normalizedGroup(tickers: string[], months: number) {
+  const endDate = endDateFor(tickers);
+  if (!endDate) return [];
+  const from = new Date(`${endDate}T00:00:00Z`);
+  from.setUTCMonth(from.getUTCMonth() - months);
+  const fromText = from.toISOString().slice(0, 10);
+  const byDate = new Map<string, number[]>();
+  for (const ticker of tickers) {
+    const points = (series[ticker] ?? []).filter(([date, close]) => date >= fromText && Number.isFinite(close));
+    const base = points[0]?.[1];
+    if (!base) continue;
+    for (const [date, close] of points) {
+      const values = byDate.get(date) ?? [];
+      values.push((close / base) * 100);
+      byDate.set(date, values);
+    }
+  }
+  return [...byDate.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([time, values]) => ({
+    time,
+    value: +(values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2),
+  }));
+}
+function gain(points: { value: number }[]) {
+  if (points.length < 2 || !points[0].value) return null;
+  return +(((points.at(-1)!.value / points[0].value - 1) * 100).toFixed(2));
+}
+const payload: Record<string, any> = {};
+for (const period of PERIODS) {
+  const groups = GROUPS.map((group) => {
+    const data = normalizedGroup(group.tickers, period.months);
+    return { ...group, data, gain: gain(data), asOf: data.at(-1)?.time ?? "" };
+  });
+  payload[period.id] = { groups, asOf: groups.map((group) => group.asOf).filter(Boolean).sort().at(-1) ?? "" };
+}
+const ready = PERIODS.some((period) => payload[period.id].groups.some((group: any) => group.data.length > 1));
+const defaultPeriod = "1M";
+const initial = payload[defaultPeriod];
+const pct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+const leader = [...initial.groups].filter((group: any) => group.gain !== null).sort((left: any, right: any) => right.gain - left.gain)[0];
+---
+
+{ready && (
+  <section class="replay-wrap" id="market-replay" data-replay data-reveal aria-labelledby="replay-title">
+    <div class="eyebrow"><span class="tag">REPLAY</span> 종목군 변화 추적 <span class="line"></span></div>
+    <section class="replay card">
+      <header class="replay-head">
+        <div>
+          <p class="replay-cap"><ChartSpline size={14} /> MARKET REPLAY</p>
+          <h2 id="replay-title">반도체 생태계, 어느 축이 움직였나</h2>
+          <p>서로 다른 절대 주가를 <b>같은 시작점 100</b>으로 바꿔, 컴퓨팅·메모리·제조·장비 종목군의 기간별 가격 변화를 비교합니다.</p>
+        </div>
+        <div class="replay-leader" data-replay-leader><TrendingUp size={14} /> {leader ? `${leader.label} 우위` : "데이터 대기"}</div>
+      </header>
+
+      <div class="replay-stats" aria-live="polite">
+        {initial.groups.map((group: any) => (
+          <div class="replay-stat" data-replay-stat={group.id} style={`--group:${group.color}`}>
+            <span>{group.label}</span>
+            <strong data-replay-gain>{pct(group.gain)}</strong>
+            <small>{group.note}</small>
+          </div>
+        ))}
+      </div>
+
+      <div class="replay-tools">
+        <div class="replay-legend" aria-label="종목군 범례">
+          {GROUPS.map((group) => <span style={`--group:${group.color}`}><i></i>{group.label}</span>)}
+          <span class="base"><i></i>기준점 100</span>
+        </div>
+        <div class="replay-ranges" role="group" aria-label="시장 리플레이 기간">
+          {PERIODS.map((period) => <button type="button" class:list={["replay-range", { active: period.id === defaultPeriod }]} data-replay-range={period.id}>{period.id}</button>)}
+        </div>
+      </div>
+      <div class="replay-chart" id="market-replay-chart"></div>
+      <footer class="replay-foot"><ArrowLeftRight size={13} /> 각 종목군 안에서는 해당 기간 첫 종가를 100으로 정규화한 뒤 평균했습니다. 결측 종목은 해당 날짜의 평균에서 제외되며, 배당·비용·환율은 반영하지 않습니다. <b data-replay-asof>{initial.asOf} 기준</b></footer>
+    </section>
+    <script type="application/json" id="market-replay-data" set:html={JSON.stringify(payload)} />
+  </section>
+)}
+
+<script>
+  import { createChart, LineSeries } from "lightweight-charts";
+
+  const root = document.querySelector<HTMLElement>("[data-replay]");
+  const payloadEl = document.getElementById("market-replay-data");
+  if (root && payloadEl) {
+    const payload = JSON.parse(payloadEl.textContent ?? "{}");
+    const holder = root.querySelector<HTMLElement>("#market-replay-chart");
+    if (holder) {
+      const readColors = () => {
+        const css = getComputedStyle(document.documentElement);
+        return { text: css.getPropertyValue("--sub").trim(), grid: css.getPropertyValue("--border").trim(), base: css.getPropertyValue("--sub").trim() };
+      };
+      const colors = readColors();
+      const chart = createChart(holder, {
+        autoSize: true,
+        layout: { background: { color: "transparent" }, textColor: colors.text, fontFamily: '"Pretendard Variable", Pretendard, sans-serif' },
+        grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
+        rightPriceScale: { borderVisible: false },
+        timeScale: { borderVisible: false },
+        crosshair: { horzLine: { labelBackgroundColor: "#778" }, vertLine: { labelBackgroundColor: "#778" } },
+        localization: { priceFormatter: (value) => value.toFixed(1) },
+      });
+      const lineMap = new Map<string, any>();
+      const fmtPct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+      const setPeriod = (period: string) => {
+        const periodData = payload[period];
+        if (!periodData) return;
+        const valid = periodData.groups.filter((group: any) => group.data?.length);
+        for (const group of valid) {
+          let line = lineMap.get(group.id);
+          if (!line) {
+            line = chart.addSeries(LineSeries, { color: group.color, lineWidth: 2.4, priceLineVisible: false, lastValueVisible: true, title: group.label });
+            lineMap.set(group.id, line);
+          }
+          line.setData(group.data);
+        }
+        chart.timeScale().fitContent();
+        const ranked = [...periodData.groups].filter((group: any) => group.gain !== null).sort((left: any, right: any) => right.gain - left.gain);
+        const leader = root.querySelector<HTMLElement>("[data-replay-leader]");
+        if (leader) leader.childNodes[1] && (leader.childNodes[1].textContent = ranked[0] ? ` ${ranked[0].label} 우위` : " 데이터 대기");
+        root.querySelectorAll<HTMLElement>("[data-replay-stat]").forEach((stat) => {
+          const group = periodData.groups.find((entry: any) => entry.id === stat.dataset.replayStat);
+          const output = stat.querySelector<HTMLElement>("[data-replay-gain]");
+          if (output) output.textContent = fmtPct(group?.gain ?? null);
+        });
+        const asOf = root.querySelector<HTMLElement>("[data-replay-asof]");
+        if (asOf) asOf.textContent = `${periodData.asOf ?? "–"} 기준`;
+      };
+      setPeriod("1M");
+      root.querySelectorAll<HTMLButtonElement>("[data-replay-range]").forEach((button) => button.addEventListener("click", () => {
+        setPeriod(button.dataset.replayRange ?? "1M");
+        root.querySelectorAll("[data-replay-range]").forEach((node) => node.classList.toggle("active", node === button));
+      }));
+      window.addEventListener("themechange", () => {
+        const next = readColors();
+        chart.applyOptions({ layout: { textColor: next.text }, grid: { vertLines: { color: next.grid }, horzLines: { color: next.grid } } });
+      });
+    }
+  }
+</script>
+
+<style>
+  .replay-wrap { margin: 7px 0 16px; }.replay { padding: 20px; overflow:hidden; background:linear-gradient(135deg,color-mix(in srgb,var(--card) 92%,#8e63ef 8%),var(--card)); }.replay-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.replay-cap { display:inline-flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.67rem; font-weight:800; letter-spacing:.11em; }.replay-head h2 { margin:0; font-size:1.15rem; letter-spacing:-.025em; }.replay-head p:not(.replay-cap) { max-width:60ch; margin:6px 0 0; color:var(--sub); font-size:.82rem; line-height:1.6; }.replay-head p b { color:var(--text); }.replay-leader { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 10px; border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border)); border-radius:999px; color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,transparent); font-size:.74rem; font-weight:800; }
+  .replay-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; margin:17px 0 15px; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--border); }.replay-stat { position:relative; padding:12px 14px; overflow:hidden; background:var(--card); }.replay-stat::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--group); }.replay-stat span,.replay-stat small { display:block; color:var(--sub); font-size:.71rem; }.replay-stat strong { display:block; margin:3px 0; color:var(--text); font-family:var(--font-num); font-size:1.12rem; font-variant-numeric:tabular-nums; }.replay-stat small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.64rem; }
+  .replay-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px; }.replay-legend { display:flex; flex-wrap:wrap; gap:10px; }.replay-legend span { display:inline-flex; align-items:center; gap:5px; color:var(--sub); font-size:.7rem; font-weight:600; }.replay-legend i { display:inline-block; width:11px; height:3px; border-radius:3px; background:var(--group); }.replay-legend .base i { background:var(--sub); opacity:.55; }.replay-ranges { display:inline-flex; gap:3px; }.replay-range { padding:3px 8px; border:1px solid var(--border); border-radius:7px; color:var(--sub); background:transparent; font-family:var(--font-num); font-size:.7rem; font-weight:700; cursor:pointer; }.replay-range:hover,.replay-range.active { color:var(--accent); border-color:color-mix(in srgb,var(--accent) 48%,var(--border)); background:color-mix(in srgb,var(--accent) 10%,transparent); }.replay-range:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .replay-chart { height:260px; }.replay-foot { display:flex; align-items:flex-start; gap:5px; margin:11px 0 0; color:var(--sub); font-size:.7rem; line-height:1.5; }.replay-foot svg { flex:none; margin-top:1px; color:var(--accent); }.replay-foot b { color:var(--text); font-weight:700; }
+  @media (max-width:620px) { .replay { padding:16px; }.replay-head { flex-direction:column; }.replay-stats { grid-template-columns:1fr; }.replay-chart { height:230px; } }
+</style>

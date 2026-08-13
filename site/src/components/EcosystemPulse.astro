@@ -1,0 +1,71 @@
+---
+import historyData from "../data/history.json";
+import { Activity, ArrowRight, GitBranch, Layers3, Scale } from "@lucide/astro";
+
+const history = historyData as any[];
+const latest = history.at(-1) ?? { date: "–", quotes: [] };
+const quoteByTicker = new Map((latest.quotes ?? []).map((quote: any) => [quote.ticker, quote]));
+const NODES = [
+  { id: "ai", label: "미국 AI 종목군", caption: "NVDA · AMD", tickers: ["NVDA", "AMD"], tone: "violet" },
+  { id: "equipment", label: "제조·장비 종목군", caption: "TSM · ASML", tickers: ["TSM", "ASML"], tone: "teal" },
+  { id: "memory", label: "글로벌 메모리", caption: "MU", tickers: ["MU"], tone: "amber" },
+  { id: "k-memory", label: "국내 메모리", caption: "삼성전자 · SK하이닉스", tickers: ["005930.KS", "000660.KS"], tone: "rose" },
+].map((node) => {
+  const quotes = node.tickers.map((ticker) => quoteByTicker.get(ticker)).filter(Boolean);
+  const moves = quotes.map((quote: any) => Number(quote.change_pct)).filter(Number.isFinite);
+  const average = moves.length ? moves.reduce((sum: number, move: number) => sum + move, 0) / moves.length : null;
+  return { ...node, quotes, average, breadth: { up: moves.filter((move: number) => move > 0).length, down: moves.filter((move: number) => move < 0).length } };
+});
+const available = NODES.filter((node) => node.quotes.length);
+const leader = [...available].filter((node) => node.average !== null).sort((left, right) => (right.average ?? -Infinity) - (left.average ?? -Infinity))[0];
+const values = available.map((node) => node.average).filter((value): value is number => value !== null);
+const spread = values.length > 1 ? Math.max(...values) - Math.min(...values) : null;
+const pct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+---
+
+{available.length > 0 && (
+  <section class="pulse-wrap" id="ecosystem-pulse" data-reveal aria-labelledby="pulse-title">
+    <div class="eyebrow"><span class="tag">PULSE</span> 글로벌 반도체 연결 <span class="line"></span></div>
+    <section class="pulse card">
+      <header class="pulse-head">
+        <div>
+          <p class="pulse-cap"><GitBranch size={14} /> ECOSYSTEM PULSE</p>
+          <h2 id="pulse-title">종목군 흐름을 한 장에 연결</h2>
+          <p>미국 AI·제조장비·글로벌 메모리·국내 메모리를 같은 <b>일간 가격 변화</b> 기준으로 나란히 봅니다. 연결선은 인과관계가 아닌 관찰 경로입니다.</p>
+        </div>
+        <div class="pulse-date"><Activity size={14} /> {latest.date} 수집 기준</div>
+      </header>
+
+      <div class="pulse-summary">
+        <div><span>상대 강세</span><strong>{leader ? leader.label : "–"}</strong><small>{leader ? pct(leader.average) : "데이터 대기"}</small></div>
+        <div><span>종목군 격차</span><strong>{spread === null ? "–" : `${spread.toFixed(1)}%p`}</strong><small>평균 일간 변화의 최대 차이</small></div>
+        <div><span>관찰 범위</span><strong>{available.reduce((count, node) => count + node.quotes.length, 0)}종목</strong><small>수집된 종목만 반영</small></div>
+      </div>
+
+      <div class="pulse-map" aria-label="반도체 관련 종목군의 일간 가격 변화">
+        {available.map((node, index) => (
+          <>
+            <article class:list={["pulse-node", node.tone]} style={`--order:${index}`}>
+              <div class="pulse-node-head"><span>{node.label}</span><strong class={node.average !== null && node.average > 0 ? "up" : node.average !== null && node.average < 0 ? "down" : "flat"}>{pct(node.average)}</strong></div>
+              <small>{node.caption}</small>
+              <div class="node-stocks">
+                {node.quotes.map((quote: any) => <span><i class={quote.change_pct > 0 ? "rise" : quote.change_pct < 0 ? "fall" : "still"}></i>{quote.name}<b>{pct(quote.change_pct)}</b></span>)}
+              </div>
+              <footer><Layers3 size={12} /> 상승 {node.breadth.up} · 하락 {node.breadth.down}</footer>
+            </article>
+            {index < available.length - 1 && <div class="pulse-arrow" aria-hidden="true"><ArrowRight size={17} /></div>}
+          </>
+        ))}
+      </div>
+      <p class="pulse-foot"><Scale size={13} /> 이 패널은 수집된 각 종목의 당일 등락률을 종목군별 단순 평균으로 표시합니다. 경제적·산업적 인과관계나 향후 성과를 단정하지 않습니다.</p>
+    </section>
+  </section>
+)}
+
+<style>
+  .pulse-wrap { margin: 8px 0 16px; }.pulse { padding:20px; overflow:hidden; background:linear-gradient(145deg,color-mix(in srgb,var(--card) 92%,#28a997 8%),var(--card)); }.pulse-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }.pulse-cap { display:inline-flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.67rem; font-weight:800; letter-spacing:.11em; }.pulse-head h2 { margin:0; font-size:1.15rem; letter-spacing:-.025em; }.pulse-head p:not(.pulse-cap) { max-width:64ch; margin:6px 0 0; color:var(--sub); font-size:.82rem; line-height:1.6; }.pulse-head p b { color:var(--text); }.pulse-date { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 10px; border:1px solid var(--border); border-radius:999px; color:var(--sub); background:color-mix(in srgb,var(--bg) 26%,transparent); font-family:var(--font-num); font-size:.7rem; font-weight:700; }
+  .pulse-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; margin:17px 0 15px; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--border); }.pulse-summary div { padding:12px 14px; background:var(--card); }.pulse-summary span,.pulse-summary small { display:block; color:var(--sub); font-size:.7rem; }.pulse-summary strong { display:block; margin:3px 0; color:var(--text); font-family:var(--font-num); font-size:1.02rem; }.pulse-summary small { font-size:.63rem; }
+  .pulse-map { display:grid; grid-template-columns:1fr 22px 1fr 22px 1fr 22px 1fr; align-items:center; gap:2px; }.pulse-node { min-height:157px; padding:13px; border:1px solid var(--border); border-top:3px solid var(--node); border-radius:11px; background:color-mix(in srgb,var(--card) 90%,var(--bg)); box-shadow:inset 0 1px 0 var(--hairline); }.pulse-node.violet { --node:#8e63ef; }.pulse-node.teal { --node:#28a997; }.pulse-node.amber { --node:#d59121; }.pulse-node.rose { --node:#e0475e; }.pulse-node-head { display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }.pulse-node-head span { color:var(--text); font-size:.76rem; font-weight:800; line-height:1.35; }.pulse-node-head strong { font-family:var(--font-num); font-size:.8rem; }.pulse-node > small { display:block; margin-top:3px; color:var(--sub); font-family:var(--font-num); font-size:.62rem; }.node-stocks { display:grid; gap:4px; margin:11px 0; }.node-stocks span { display:grid; grid-template-columns:6px 1fr auto; align-items:center; gap:5px; color:var(--sub); font-size:.67rem; }.node-stocks i { width:6px; height:6px; border-radius:50%; background:var(--sub); }.node-stocks i.rise { background:var(--up); }.node-stocks i.fall { background:var(--down); }.node-stocks b { color:var(--text); font-family:var(--font-num); font-size:.67rem; }.pulse-node footer { display:flex; align-items:center; gap:4px; padding-top:7px; border-top:1px solid var(--border); color:var(--sub); font-size:.62rem; }.pulse-arrow { display:grid; place-items:center; color:color-mix(in srgb,var(--accent) 68%,var(--sub)); }.up { color:var(--up)!important; }.down { color:var(--down)!important; }.flat { color:var(--sub)!important; }.pulse-foot { display:flex; align-items:flex-start; gap:5px; margin:12px 0 0; color:var(--sub); font-size:.7rem; line-height:1.5; }.pulse-foot svg { flex:none; margin-top:1px; color:var(--accent); }
+  @media (max-width:800px) { .pulse-map { grid-template-columns:1fr 22px 1fr; }.pulse-map .pulse-arrow:nth-of-type(2) { display:none; } .pulse-node:nth-of-type(5) { grid-column:1; } }
+  @media (max-width:620px) { .pulse { padding:16px; }.pulse-head { flex-direction:column; }.pulse-summary { grid-template-columns:1fr; }.pulse-map { grid-template-columns:1fr; gap:7px; }.pulse-arrow { transform:rotate(90deg); height:14px; }.pulse-node { min-height:0; }.node-stocks { grid-template-columns:repeat(2,minmax(0,1fr)); }.pulse-node footer { margin-top:7px; } }
+</style>

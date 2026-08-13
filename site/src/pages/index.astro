@@ -9,6 +9,8 @@ import MarketMood from "../components/MarketMood.astro";
 import IntradayTimeline from "../components/IntradayTimeline.astro";
 import StockCharts from "../components/StockCharts.astro";
 import RelativeStrength from "../components/RelativeStrength.astro";
+import MarketReplay from "../components/MarketReplay.astro";
+import EcosystemPulse from "../components/EcosystemPulse.astro";
 import UsSemiReport from "../components/UsSemiReport.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
@@ -41,6 +43,10 @@ if (latest) ({ Content } = await render(latest));
   <StockCharts />
 
   <RelativeStrength />
+
+  <MarketReplay />
+
+  <EcosystemPulse />
 
   <UsSemiReport />
 
