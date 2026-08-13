@@ -5,6 +5,8 @@ import Hero from "../components/Hero.astro";
 import DataStatus from "../components/DataStatus.astro";
 import MarketFocus from "../components/MarketFocus.astro";
 import PersonalWorkspace from "../components/PersonalWorkspace.astro";
+import ObservationRules from "../components/ObservationRules.astro";
+import IntelligenceRail from "../components/IntelligenceRail.astro";
 import MarketMood from "../components/MarketMood.astro";
 import IntradayTimeline from "../components/IntradayTimeline.astro";
 import StockCharts from "../components/StockCharts.astro";
@@ -15,6 +17,9 @@ import UsSemiReport from "../components/UsSemiReport.astro";
 import QuoteCards from "../components/QuoteCards.astro";
 import MarketChart from "../components/MarketChart.astro";
 import NewsHeadlines from "../components/NewsHeadlines.astro";
+import NarrativeDelta from "../components/NarrativeDelta.astro";
+import EventTimeline from "../components/EventTimeline.astro";
+import NewsDelta from "../components/NewsDelta.astro";
 import BriefingArticle from "../components/BriefingArticle.astro";
 import { ChevronRight } from "@lucide/astro";
 import { base } from "../lib/base";
@@ -30,36 +35,44 @@ if (latest) ({ Content } = await render(latest));
 <Base>
   <Hero date={latest?.id} />
 
+  <IntelligenceRail />
+
   <MarketFocus />
 
   <PersonalWorkspace />
 
+  <ObservationRules />
+
   <DataStatus />
 
-  <MarketMood />
+  <div data-density-section="optional">
+    <MarketMood />
+  </div>
 
   <IntradayTimeline />
 
-  <StockCharts />
+  <div data-density-section="optional">
+    <StockCharts />
+    <RelativeStrength />
+    <MarketReplay />
+    <EcosystemPulse />
+    <UsSemiReport />
 
-  <RelativeStrength />
+    <div class="eyebrow"><span class="tag">QUOTES</span> 주요 시세 <span class="line"></span></div>
+    <QuoteCards />
 
-  <MarketReplay />
+    <div class="eyebrow"><span class="tag">TREND</span> 지수 추이 <span class="line"></span></div>
+    <MarketChart />
 
-  <EcosystemPulse />
+    <div class="eyebrow" id="news"><span class="tag">NEWS</span> 주요 헤드라인 <span class="line"></span></div>
+    <NewsHeadlines />
+    <NewsDelta />
+    <EventTimeline />
+    <NarrativeDelta />
+  </div>
 
-  <UsSemiReport />
-
-  <div class="eyebrow"><span class="tag">QUOTES</span> 주요 시세 <span class="line"></span></div>
-  <QuoteCards />
-
-  <div class="eyebrow"><span class="tag">TREND</span> 지수 추이 <span class="line"></span></div>
-  <MarketChart />
-
-  <div class="eyebrow"><span class="tag">NEWS</span> 주요 헤드라인 <span class="line"></span></div>
-  <NewsHeadlines />
-
-  <div class="eyebrow"><span class="tag">BRIEFING</span> 오늘의 브리핑 <span class="line"></span></div>
+  <div id="briefing">
+    <div class="eyebrow"><span class="tag">BRIEFING</span> 오늘의 브리핑 <span class="line"></span></div>
   {latest ? (
     <BriefingArticle>
       <Content />
@@ -70,7 +83,9 @@ if (latest) ({ Content } = await render(latest));
       <p class="empty-sub">첫 워크플로 실행 후 아침 브리핑과 시세 카드가 여기에 채워집니다.</p>
     </div>
   )}
+  </div>
 
+  <div data-density-section="optional">
   {recent.length > 0 && (
     <section class="recent">
       <div class="eyebrow"><span class="tag">ARCHIVE</span> 지난 브리핑 <span class="line"></span></div>
@@ -85,6 +100,7 @@ if (latest) ({ Content } = await render(latest));
       <a class="more" href={`${base}archive/`}>전체 아카이브 보기 →</a>
     </section>
   )}
+  </div>
 </Base>
 
 <style>

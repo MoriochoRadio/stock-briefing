@@ -1,0 +1,129 @@
+---
+import historyData from "../data/history.json";
+import { Activity, BadgeCheck, BellOff, ChartNoAxesCombined, CircleGauge, SlidersHorizontal } from "@lucide/astro";
+
+const history = (historyData as any[]).filter((entry) => entry?.date && Array.isArray(entry?.quotes)).sort((left, right) => left.date.localeCompare(right.date));
+const latest = history.at(-1);
+const payload = history.map((snap: any) => ({
+  date: snap.date,
+  quotes: Object.fromEntries((snap.quotes ?? []).filter((quote: any) => quote?.ticker && typeof quote?.close === "number").map((quote: any) => [quote.ticker, { name: quote.name, close: quote.close, change: quote.change_pct }])),
+}));
+---
+
+{latest && (
+  <section class="rules-library" data-rules-library aria-labelledby="rules-library-title">
+    <div class="eyebrow"><span class="tag">RULES</span> 관찰 규칙 <span class="line"></span></div>
+    <section class="rules-card card">
+      <header class="rules-head">
+        <div>
+          <p class="rules-cap"><SlidersHorizontal size={14} /> OBSERVATION RULES</p>
+          <h2 id="rules-library-title">나의 관찰 규칙 라이브러리</h2>
+          <p>선택한 관심 종목에 대해 <b>변동폭·기간 모멘텀·방향 일치</b>를 조합해 화면에서만 상태를 확인합니다.</p>
+        </div>
+        <span class="rules-local"><BellOff size={14} /> 알림·서버 저장 없음</span>
+      </header>
+      <div class="rules-options" role="group" aria-label="활성 관찰 규칙">
+        <button type="button" data-rule="move" aria-pressed="true"><Activity size={14} /><span>변동폭</span><small>당일 절대 등락</small></button>
+        <button type="button" data-rule="momentum" aria-pressed="true"><ChartNoAxesCombined size={14} /><span>기간 모멘텀</span><small>선택 기간 수익률</small></button>
+        <button type="button" data-rule="alignment" aria-pressed="false"><CircleGauge size={14} /><span>방향 일치</span><small>당일·기간 방향</small></button>
+      </div>
+      <div class="rules-settings">
+        <label>당일 변동폭 기준 <span><input data-rules-threshold type="range" min="1" max="8" step="0.5" value="3" /><output data-rules-threshold-output>±3.0%</output></span></label>
+        <label>기간 기준
+          <select data-rules-period><option value="5">최근 5개 기록</option><option value="10">최근 10개 기록</option><option value="20">최근 20개 기록</option></select>
+        </label>
+        <p data-rules-count><BadgeCheck size={14} /> 규칙을 계산하는 중입니다.</p>
+      </div>
+      <div class="rules-grid" data-rules-grid aria-live="polite"></div>
+      <p class="rules-empty" data-rules-empty hidden>나의 관찰 데스크에서 종목을 추가하면, 이곳에서 규칙 충족 여부를 함께 볼 수 있습니다.</p>
+      <footer><BadgeCheck size={14} /> 규칙은 수집된 종가와 등락률을 기계적으로 분류합니다. 중요도·인과관계·향후 수익을 뜻하지 않으며 매매 권유가 아닙니다.</footer>
+    </section>
+    <script type="application/json" id="rules-history" set:html={JSON.stringify(payload)} />
+  </section>
+)}
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-rules-library]");
+  const source = document.getElementById("rules-history");
+  if (root && source) {
+    const history = JSON.parse(source.textContent ?? "[]");
+    const allTickers = Object.keys(history.at(-1)?.quotes ?? {});
+    const defaults = { active: ["move", "momentum"], threshold: 3, period: 5 };
+    let state = { ...defaults };
+    const workspaceKey = "stock-briefing:workspace-v1";
+    const rulesKey = "stock-briefing:rules-v1";
+    const selected = () => {
+      try {
+        const workspace = JSON.parse(localStorage.getItem(workspaceKey) ?? "{}");
+        if (Array.isArray(workspace?.tickers)) return [...new Set(workspace.tickers.filter((ticker: any) => allTickers.includes(ticker)))].slice(0, 8);
+      } catch (_) {}
+      return ["005930.KS", "000660.KS", "NVDA"].filter((ticker) => allTickers.includes(ticker));
+    };
+    try {
+      const saved = JSON.parse(localStorage.getItem(rulesKey) ?? "{}");
+      state = {
+        active: Array.isArray(saved?.active) ? saved.active.filter((rule: any) => ["move", "momentum", "alignment"].includes(rule)) : defaults.active,
+        threshold: Math.min(8, Math.max(1, Number(saved?.threshold) || defaults.threshold)),
+        period: [5, 10, 20].includes(Number(saved?.period)) ? Number(saved.period) : defaults.period,
+      };
+      if (!state.active.length) state.active = defaults.active;
+    } catch (_) {}
+    const save = () => { try { localStorage.setItem(rulesKey, JSON.stringify(state)); } catch (_) {} };
+    const pct = (value: number | null) => value === null ? "–" : `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
+    const periodChange = (ticker: string) => {
+      const points = history.map((point: any) => ({ date: point.date, close: point.quotes?.[ticker]?.close })).filter((point: any) => typeof point.close === "number");
+      if (points.length < 2) return null;
+      const end = points.at(-1), start = points[Math.max(0, points.length - state.period - 1)];
+      return start.close ? ((end.close / start.close) - 1) * 100 : null;
+    };
+    const render = () => {
+      const tickers = selected();
+      const grid = root.querySelector<HTMLElement>("[data-rules-grid]");
+      const threshold = root.querySelector<HTMLInputElement>("[data-rules-threshold]");
+      const period = root.querySelector<HTMLSelectElement>("[data-rules-period]");
+      const thresholdOut = root.querySelector<HTMLOutputElement>("[data-rules-threshold-output]");
+      if (threshold) threshold.value = String(state.threshold);
+      if (period) period.value = String(state.period);
+      if (thresholdOut) thresholdOut.value = `±${state.threshold.toFixed(1)}%`;
+      root.querySelectorAll<HTMLButtonElement>("[data-rule]").forEach((button) => button.setAttribute("aria-pressed", String(state.active.includes(button.dataset.rule ?? ""))));
+      if (!grid) return;
+      grid.replaceChildren();
+      let hits = 0;
+      tickers.forEach((ticker) => {
+        const quote = history.at(-1)?.quotes?.[ticker];
+        if (!quote) return;
+        const daily = typeof quote.change === "number" ? quote.change : null;
+        const momentum = periodChange(ticker);
+        const moveHit = daily !== null && Math.abs(daily) >= state.threshold;
+        const momentumHit = momentum !== null && momentum > 0;
+        const alignmentHit = daily !== null && momentum !== null && daily !== 0 && momentum !== 0 && Math.sign(daily) === Math.sign(momentum);
+        const activeHits = [["move", moveHit], ["momentum", momentumHit], ["alignment", alignmentHit]].filter(([rule, hit]) => state.active.includes(rule as string) && hit).length;
+        const activeCount = state.active.length;
+        const satisfied = activeHits === activeCount;
+        if (satisfied) hits++;
+        const card = document.createElement("article");
+        card.className = `rule-item ${satisfied ? "satisfied" : "watch"}`;
+        card.innerHTML = `<header><div><span>${quote.name}</span><small>${ticker}</small></div><strong class="${daily !== null && daily > 0 ? "up" : daily !== null && daily < 0 ? "down" : "flat"}">${pct(daily)}</strong></header><div class="rule-metrics"><span>기간 성과 <b class="${momentum !== null && momentum > 0 ? "up" : momentum !== null && momentum < 0 ? "down" : "flat"}">${pct(momentum)}</b></span><span>${activeHits}/${activeCount} 규칙 충족</span></div><p class="rule-read">${state.active.includes("move") ? `<i class="${moveHit ? "yes" : "no"}">변동폭 ${moveHit ? "충족" : "대기"}</i>` : ""}${state.active.includes("momentum") ? `<i class="${momentumHit ? "yes" : "no"}">모멘텀 ${momentumHit ? "충족" : "대기"}</i>` : ""}${state.active.includes("alignment") ? `<i class="${alignmentHit ? "yes" : "no"}">방향 ${alignmentHit ? "일치" : "불일치"}</i>` : ""}</p>`;
+        grid.append(card);
+      });
+      const empty = root.querySelector<HTMLElement>("[data-rules-empty]");
+      if (empty) empty.hidden = tickers.length > 0;
+      const count = root.querySelector<HTMLElement>("[data-rules-count]");
+      if (count) count.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg> ${tickers.length}개 중 ${hits}개 종목이 선택한 모든 규칙을 충족`;
+    };
+    root.querySelectorAll<HTMLButtonElement>("[data-rule]").forEach((button) => button.addEventListener("click", () => {
+      const rule = button.dataset.rule ?? "";
+      state.active = state.active.includes(rule) ? state.active.filter((item) => item !== rule) : [...state.active, rule];
+      if (!state.active.length) state.active = defaults.active;
+      save(); render();
+    }));
+    root.querySelector<HTMLInputElement>("[data-rules-threshold]")?.addEventListener("input", (event) => { state.threshold = Number((event.target as HTMLInputElement).value); save(); render(); });
+    root.querySelector<HTMLSelectElement>("[data-rules-period]")?.addEventListener("change", (event) => { state.period = Number((event.target as HTMLSelectElement).value); save(); render(); });
+    render();
+  }
+</script>
+
+<style>
+  .rules-library { margin:20px 0 26px; }.rules-card { padding:20px; background:linear-gradient(140deg,color-mix(in srgb,var(--card) 91%,#3a82e0 9%),var(--card)); }.rules-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }.rules-cap { display:flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.66rem; font-weight:800; letter-spacing:.11em; }.rules-head h2 { margin:0; font-size:1.16rem; letter-spacing:-.025em; }.rules-head p:not(.rules-cap) { max-width:60ch; margin:6px 0 0; color:var(--sub); font-size:.8rem; line-height:1.6; }.rules-head p b { color:var(--text); }.rules-local { display:flex; align-items:center; gap:5px; flex:none; padding:6px 9px; border:1px solid var(--border); border-radius:999px; color:var(--sub); font-size:.68rem; font-weight:700; }.rules-options { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin:15px 0 9px; }.rules-options button { display:grid; grid-template-columns:auto 1fr; column-gap:6px; align-items:center; padding:10px; border:1px solid var(--border); border-radius:10px; color:var(--sub); background:color-mix(in srgb,var(--bg) 24%,var(--card)); text-align:left; cursor:pointer; }.rules-options button svg { color:var(--accent); }.rules-options button span { color:var(--text); font-size:.76rem; font-weight:800; }.rules-options button small { grid-column:2; color:var(--sub); font-size:.62rem; }.rules-options button[aria-pressed="true"] { border-color:color-mix(in srgb,var(--accent) 55%,var(--border)); background:color-mix(in srgb,var(--accent) 10%,var(--card)); }.rules-options button:focus-visible,.rules-settings select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }.rules-settings { display:grid; grid-template-columns:1.1fr .8fr 1.1fr; align-items:end; gap:10px; margin:10px 0; padding:10px; border:1px solid var(--border); border-radius:10px; background:color-mix(in srgb,var(--bg) 23%,var(--card)); }.rules-settings label { display:grid; gap:5px; color:var(--sub); font-size:.68rem; font-weight:700; }.rules-settings label span { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }.rules-settings input { width:100%; accent-color:var(--accent); }.rules-settings output { color:var(--accent); font-family:var(--font-num); font-size:.75rem; font-weight:800; }.rules-settings select { height:32px; padding:0 7px; border:1px solid var(--border); border-radius:7px; color:var(--text); background:var(--card); font:inherit; }.rules-settings p { display:flex; align-items:center; gap:5px; margin:0; padding:8px; border-left:2px solid var(--accent); color:var(--sub); background:color-mix(in srgb,var(--accent) 6%,transparent); font-size:.68rem; line-height:1.4; }.rules-settings p svg { flex:none; color:var(--accent); }.rules-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(205px,1fr)); gap:8px; }.rule-item { padding:12px; border:1px solid var(--border); border-radius:11px; background:color-mix(in srgb,var(--card) 93%,var(--bg)); }.rule-item.satisfied { border-color:color-mix(in srgb,var(--up) 48%,var(--border)); }.rule-item header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }.rule-item header div { display:grid; gap:2px; }.rule-item header span { color:var(--text); font-size:.81rem; font-weight:800; }.rule-item header small { color:var(--sub); font-family:var(--font-num); font-size:.61rem; }.rule-item header strong { font-family:var(--font-num); font-size:.82rem; }.rule-metrics { display:flex; justify-content:space-between; gap:7px; margin:9px 0; padding:7px; border:1px solid var(--border); border-radius:7px; color:var(--sub); font-size:.63rem; }.rule-metrics span { display:grid; gap:2px; }.rule-metrics b { font-family:var(--font-num); font-size:.72rem; }.rule-read { display:flex; flex-wrap:wrap; gap:4px; margin:0; }.rule-read i { padding:3px 5px; border:1px solid var(--border); border-radius:5px; color:var(--sub); font-size:.61rem; font-style:normal; }.rule-read i.yes { color:var(--up); border-color:color-mix(in srgb,var(--up) 35%,var(--border)); }.rule-read i.no { color:var(--sub); }.rules-empty { margin:0; padding:13px; border:1px dashed var(--border); border-radius:10px; color:var(--sub); font-size:.75rem; text-align:center; }.rules-card footer { display:flex; align-items:flex-start; gap:5px; margin-top:11px; padding-top:10px; border-top:1px solid var(--border); color:var(--sub); font-size:.67rem; line-height:1.5; }.rules-card footer svg { flex:none; margin-top:1px; color:var(--accent); }.up { color:var(--up)!important; }.down { color:var(--down)!important; }.flat { color:var(--sub)!important; }
+  @media (max-width:680px) { .rules-card { padding:16px; }.rules-head { flex-direction:column; }.rules-options { grid-template-columns:1fr; }.rules-settings { grid-template-columns:1fr; }.rules-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }.@media (max-width:410px) { .rules-grid { grid-template-columns:1fr; } }
+</style>

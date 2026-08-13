@@ -348,6 +348,48 @@ def build_news(data, limit=10):
     print(f"news: {len(items)} headline(s)")
 
 
+def build_event_ledger(data, keep_days=120, per_day=12):
+    """수집 시점의 헤드라인을 날짜별 이벤트 기록으로 보존한다.
+
+    뉴스 기사 제목·출처·카테고리·링크만 기록하며, 가격 변동의 원인이나 중요도를
+    자동 추정하지 않는다. 같은 KST 날짜에는 최신 수집 결과로 교체해 장중 재실행에도
+    한 날짜의 이벤트 묶음만 남긴다.
+    """
+    path = ROOT / "site" / "src" / "data" / "event_ledger.json"
+    previous = []
+    if path.exists():
+        try:
+            previous = json.loads(path.read_text(encoding="utf-8")).get("entries", [])
+        except Exception:
+            previous = []
+    seen, items = set(), []
+    for raw in data.get("news", []):
+        title, parsed_source = _split_source(raw.get("title", ""))
+        source = raw.get("source") or parsed_source
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        items.append({
+            "title": title,
+            "source": source,
+            "link": raw.get("link", ""),
+            "pub": raw.get("pub", ""),
+            "category": raw.get("category") or raw.get("cat") or _news_category(raw.get("query", "")),
+        })
+        if len(items) >= per_day:
+            break
+    entry = {
+        "date": data["date_kst"],
+        "generatedAt": data.get("generated_at", ""),
+        "items": items,
+    }
+    entries = [record for record in previous if record.get("date") != entry["date"]] + [entry]
+    entries = sorted((record for record in entries if record.get("date")), key=lambda record: record["date"])[-keep_days:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"entries": entries}, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    print(f"event ledger: {len(entries)} day(s), latest={len(items)} item(s)")
+
+
 def main():
     cfg = load_config()
     now = datetime.now(KST)
@@ -367,6 +409,7 @@ def main():
     build_series(cfg)
     build_sentiment(cfg, data)
     build_news(data)
+    build_event_ledger(data)
     write_quality(cfg, data)
     print(f"saved {out} — quotes:{len(data['indices'])+len(data['watchlist_us'])+len(data['watchlist_kr'])}, news:{len(data['news'])}")
 

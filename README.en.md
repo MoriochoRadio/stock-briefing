@@ -40,19 +40,27 @@ Tracks the US and Korean stock markets **all day long**, automatically generatin
 - **Market Replay** — normalizes AI-compute, memory, manufacturing, and equipment ticker groups to a 100-point period baseline for 1M, 3M, 6M, and 1Y relative price-move comparison
 - **Ecosystem Pulse** — compares daily moves across US AI, manufacturing/equipment, global memory, and Korean memory groups. Connecting lines are an observation path rather than a causal claim, and averages include collected tickers only
 - **Archive Market Record Review** — lets users select any two collected dates in the archive to compare closing-price changes and the largest move across KOSPI, Nasdaq, AI compute, and memory names, separating briefing narrative from recorded prices
+- **My History Lens** — carries browser-only Observation Desk tickers into the archive, so the same two collected dates can be compared for personal tracked names without transmitting settings to a server
+- **Briefing and News Delta** — shows newly introduced, repeated, and reduced structured themes or preserved event headlines. It does not automatically judge importance, accuracy, causality, or outlook
+- **Observation Rules Library** — combines daily move, period momentum, and directional alignment for tracked names on screen only; it provides no automated trading, alerts, or performance forecast
+- **Event Ledger Timeline** — retains collected headline categories, sources, and links by date from the feature introduction onward, without asserting price causality
+- **Weekly and Monthly Reviews** (`/reviews`) — deterministically generated from the first and last collected closes in each period plus retained event records, refreshing the current period daily
+- **Intelligence Map UI** — adds a fast navigation rail below the hero and a browser-only `Full / Focus` reading-density switch
 - **Dashboard** (`/dashboard`) — bento grid, sector heatmap · **Archive** — past briefings by date
 
 ## How It Works
 
 **Scripts** (`scripts/`)
-- `fetch_data.py` — collects yfinance quotes + Google News RSS + CNN Fear & Greed Index → `sentiment/series/news/history.json` and `quality.json` (coverage, as-of dates, sources)
+- `fetch_data.py` — collects yfinance quotes + Google News RSS + CNN Fear & Greed Index → `sentiment/series/news/history.json`, `event_ledger.json`, and `quality.json` (coverage, as-of dates, sources)
+- `generate_reviews.py` — deterministically creates `reviews/weekly` and `reviews/monthly` from the first and last collected closes plus retained event records
+- `seed_event_ledger.py` — one-off initialization of the event ledger from the existing published news snapshot
 - `generate.py` — writes the morning briefing with the LLM → `briefings/<date>.md`. Engine calls are factored into `run_llm()` (built-in retries and engine fallback, shared with the intraday script); only permitted news evidence IDs are kept and rendered as clickable sources
 - `intraday_kr.py` — Korean market open/mid/close + (at close) US semiconductor analysis → `site/src/data/intraday.json`, including snapshot-level coverage, as-of dates, and delay status. If the LLM fails, existing real analysis is preserved (no downgrade)
 - `ta.py` — shared technical indicators (RSI, MACD, ATR, SMA, Bollinger Bands, trend detection)
 - `deep_report.py` — one-off local deep-dive report (matplotlib chart PNGs; `reports/` is gitignored)
 
 **Workflows** (`.github/workflows/`)
-- `daily.yml` — morning briefing at 22:10 UTC (07:10 KST)
+- `daily.yml` — morning briefing at 22:10 UTC (07:10 KST), followed by refresh of the current weekly/monthly review and event ledger
 - `intraday_kr.yml` — dense cron every 30 minutes. PHASE is auto-determined by the script from the KST time at execution (`auto`) — labels and data stay consistent even when cron is delayed. If nothing is captured, commit/build/deploy are skipped
 - Data collection and analysis run independently; only the **Pages deployment job** is serialized in the shared `pages-deploy` queue. The deploy job checks out current `main` immediately before its build, preventing an old workflow SHA from being published, while retaining push retries, one automatic Pages retry, and pip/npm caching
 

@@ -1,0 +1,107 @@
+---
+import historyData from "../data/history.json";
+import { BookmarkCheck, CalendarRange, ChartNoAxesCombined, Eye, ShieldCheck } from "@lucide/astro";
+
+const history = (historyData as any[]).filter((entry) => entry?.date && Array.isArray(entry?.quotes)).sort((left, right) => left.date.localeCompare(right.date));
+const options = history.slice(-35);
+const latest = options.at(-1);
+const defaultStart = options.at(-6) ?? options[0];
+const allQuotes = (latest?.quotes ?? []).filter((quote: any) => typeof quote?.close === "number" && quote?.ticker && quote?.name);
+const payload = options.map((snap) => ({ date: snap.date, quotes: Object.fromEntries((snap.quotes ?? []).filter((quote: any) => typeof quote?.close === "number").map((quote: any) => [quote.ticker, { close: quote.close, name: quote.name }])) }));
+---
+
+{options.length >= 2 && allQuotes.length > 0 && (
+  <section class="personal-archive" data-personal-archive aria-labelledby="personal-archive-title">
+    <div class="eyebrow"><span class="tag">MY HISTORY</span> 나의 기록 <span class="line"></span></div>
+    <section class="personal-archive-card card">
+      <header class="personal-archive-head">
+        <div>
+          <p class="personal-archive-cap"><BookmarkCheck size={14} /> PERSONAL ARCHIVE LENS</p>
+          <h2 id="personal-archive-title">나의 관찰 종목, 과거 기록에서 다시 보기</h2>
+          <p>메인 화면의 <b>나의 관찰 데스크</b>에 저장한 종목을 자동으로 불러와 두 수집 날짜의 종가 변화를 비교합니다.</p>
+        </div>
+        <span class="privacy-mark"><ShieldCheck size={14} /> 브라우저 저장만 사용</span>
+      </header>
+      <div class="personal-archive-controls">
+        <label>시작 기록
+          <select data-pal-start>
+            {options.map((item) => <option value={item.date} selected={item.date === defaultStart.date}>{item.date}</option>)}
+          </select>
+        </label>
+        <div class="pal-arrow" aria-hidden="true"><CalendarRange size={16} /></div>
+        <label>종료 기록
+          <select data-pal-end>
+            {options.map((item) => <option value={item.date} selected={item.date === latest.date}>{item.date}</option>)}
+          </select>
+        </label>
+      </div>
+      <div class="personal-archive-state" data-pal-state><Eye size={14} /> 브라우저의 관찰 종목을 불러오는 중입니다.</div>
+      <div class="personal-archive-grid" data-pal-grid aria-live="polite">
+        {allQuotes.map((quote: any) => (
+          <article class="personal-archive-item" data-pal-card={quote.ticker} hidden>
+            <header><span>{quote.name}</span><small>{quote.ticker}</small></header>
+            <strong data-pal-change>–</strong>
+            <footer><ChartNoAxesCombined size={12} /><span data-pal-prices>기록 비교 중</span></footer>
+          </article>
+        ))}
+      </div>
+      <p class="personal-archive-empty" data-pal-empty hidden>선택된 관찰 종목이 없습니다. 메인 화면의 ‘나의 관찰 데스크’에서 종목을 추가하면 여기에 자동으로 표시됩니다.</p>
+      <p class="personal-archive-foot">변화율은 두 수집 시점의 종가를 비교하며, 개인 설정은 서버로 전송하지 않습니다. 자동 매매·알림·성과 예측 기능이 아닙니다.</p>
+    </section>
+    <script type="application/json" id="personal-archive-data" set:html={JSON.stringify(payload)} />
+  </section>
+)}
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-personal-archive]");
+  const source = document.getElementById("personal-archive-data");
+  if (root && source) {
+    const history = JSON.parse(source.textContent ?? "[]");
+    const startInput = root.querySelector<HTMLSelectElement>("[data-pal-start]");
+    const endInput = root.querySelector<HTMLSelectElement>("[data-pal-end]");
+    const cardTickers = Array.from(root.querySelectorAll<HTMLElement>("[data-pal-card]")).map((item) => item.dataset.palCard ?? "");
+    const defaults = ["005930.KS", "000660.KS", "NVDA"];
+    let tickers = defaults;
+    try {
+      const saved = JSON.parse(localStorage.getItem("stock-briefing:workspace-v1") ?? "{}");
+      if (Array.isArray(saved?.tickers)) tickers = [...new Set(saved.tickers.filter((ticker: any) => typeof ticker === "string" && cardTickers.includes(ticker)))].slice(0, 8);
+    } catch (_) {}
+    if (!tickers.length) tickers = defaults.filter((ticker) => cardTickers.includes(ticker));
+    const format = (number: number) => number.toLocaleString("ko-KR", { maximumFractionDigits: number >= 1000 ? 0 : 2 });
+    const percent = (number: number | null) => number === null ? "–" : `${number > 0 ? "+" : number < 0 ? "−" : ""}${Math.abs(number).toFixed(1)}%`;
+    const render = () => {
+      let start = history.find((item: any) => item.date === startInput?.value) ?? history[0];
+      let end = history.find((item: any) => item.date === endInput?.value) ?? history.at(-1);
+      if (!start || !end) return;
+      const startIndex = history.findIndex((item: any) => item.date === start.date);
+      const endIndex = history.findIndex((item: any) => item.date === end.date);
+      if (startIndex > endIndex) { if (endInput) endInput.value = start.date; end = start; }
+      root.querySelectorAll<HTMLElement>("[data-pal-card]").forEach((card) => {
+        const ticker = card.dataset.palCard ?? "";
+        const visible = tickers.includes(ticker);
+        card.hidden = !visible;
+        if (!visible) return;
+        const first = start.quotes?.[ticker]?.close;
+        const last = end.quotes?.[ticker]?.close;
+        const change = typeof first === "number" && typeof last === "number" && first !== 0 ? ((last / first) - 1) * 100 : null;
+        const value = card.querySelector<HTMLElement>("[data-pal-change]");
+        const prices = card.querySelector<HTMLElement>("[data-pal-prices]");
+        if (value) { value.textContent = percent(change); value.className = change !== null && change > 0 ? "up" : change !== null && change < 0 ? "down" : "flat"; }
+        if (prices) prices.textContent = typeof first === "number" && typeof last === "number" ? `${format(first)} → ${format(last)}` : "비교 데이터 부족";
+      });
+      const state = root.querySelector<HTMLElement>("[data-pal-state]");
+      const empty = root.querySelector<HTMLElement>("[data-pal-empty]");
+      if (state) state.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/><path d="M12 3v12"/><path d="M5 21h14"/></svg> ${tickers.length}개 관찰 종목 · ${start.date} → ${end.date} 수집 종가 비교`;
+      if (empty) empty.hidden = tickers.length > 0;
+    };
+    startInput?.addEventListener("change", render);
+    endInput?.addEventListener("change", render);
+    render();
+  }
+</script>
+
+<style>
+  .personal-archive { margin:20px 0 28px; }.personal-archive-card { padding:19px; background:linear-gradient(140deg,color-mix(in srgb,var(--card) 90%,#28a997 10%),var(--card)); }.personal-archive-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }.personal-archive-cap { display:flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.66rem; font-weight:800; letter-spacing:.11em; }.personal-archive-head h2 { margin:0; font-size:1.12rem; letter-spacing:-.025em; }.personal-archive-head p:not(.personal-archive-cap) { max-width:61ch; margin:6px 0 0; color:var(--sub); font-size:.8rem; line-height:1.6; }.personal-archive-head p b { color:var(--text); }.privacy-mark { display:flex; align-items:center; gap:5px; flex:none; padding:6px 9px; border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); border-radius:999px; color:var(--accent); background:color-mix(in srgb,var(--accent) 9%,transparent); font-size:.67rem; font-weight:800; }.personal-archive-controls { display:grid; grid-template-columns:1fr 25px 1fr; align-items:end; gap:8px; margin:15px 0 10px; padding:10px; border:1px solid var(--border); border-radius:11px; background:color-mix(in srgb,var(--bg) 24%,var(--card)); }.personal-archive-controls label { display:grid; gap:5px; color:var(--sub); font-size:.68rem; font-weight:700; }.personal-archive-controls select { height:33px; padding:0 8px; border:1px solid var(--border); border-radius:7px; color:var(--text); background:var(--card); font-family:var(--font-num); font-size:.75rem; }.personal-archive-controls select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }.pal-arrow { display:grid; place-items:center; height:33px; color:var(--accent); }.personal-archive-state { display:flex; align-items:center; gap:5px; margin:0 0 9px; padding:8px 10px; border-left:2px solid var(--accent); color:var(--sub); background:color-mix(in srgb,var(--accent) 7%,transparent); font-size:.7rem; }.personal-archive-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); gap:8px; }.personal-archive-item { padding:12px; border:1px solid var(--border); border-radius:10px; background:color-mix(in srgb,var(--card) 93%,var(--bg)); }.personal-archive-item header { display:grid; gap:2px; }.personal-archive-item header span { color:var(--text); font-size:.8rem; font-weight:800; }.personal-archive-item header small { color:var(--sub); font-family:var(--font-num); font-size:.62rem; }.personal-archive-item > strong { display:block; margin:8px 0; font-family:var(--font-num); font-size:1.08rem; }.personal-archive-item footer { display:flex; align-items:center; gap:4px; padding-top:7px; border-top:1px solid var(--border); color:var(--sub); font-family:var(--font-num); font-size:.62rem; white-space:nowrap; overflow:hidden; }.personal-archive-item footer span { overflow:hidden; text-overflow:ellipsis; }.personal-archive-item footer svg { flex:none; color:var(--accent); }.up { color:var(--up)!important; }.down { color:var(--down)!important; }.flat { color:var(--sub)!important; }.personal-archive-empty { margin:0; padding:13px; border:1px dashed var(--border); border-radius:10px; color:var(--sub); font-size:.75rem; text-align:center; }.personal-archive-foot { margin:10px 0 0; color:var(--sub); font-size:.67rem; line-height:1.5; }
+  @media (max-width:620px) { .personal-archive-card { padding:16px; }.personal-archive-head { flex-direction:column; }.personal-archive-controls { grid-template-columns:1fr; }.pal-arrow { transform:rotate(90deg); }.personal-archive-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:400px) { .personal-archive-grid { grid-template-columns:1fr; } }
+</style>

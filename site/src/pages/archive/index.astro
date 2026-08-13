@@ -3,6 +3,7 @@ import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import { base } from "../../lib/base";
 import ArchiveReplay from "../../components/ArchiveReplay.astro";
+import PersonalArchiveLens from "../../components/PersonalArchiveLens.astro";
 
 const all = (await getCollection("briefings")).sort((a, b) => b.id.localeCompare(a.id));
 
@@ -22,6 +23,7 @@ const months = Object.keys(byMonth).sort().reverse();
     <p class="hero-sum">지난 브리핑을 월별로 모았습니다. 총 {all.length}건.</p>
   </header>
   <ArchiveReplay />
+  <PersonalArchiveLens />
 
   {months.length === 0 && (
     <div class="card empty">

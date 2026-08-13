@@ -1,0 +1,43 @@
+---
+import ledger from "../data/event_ledger.json";
+import { CirclePlus, Newspaper, Repeat2, ScanSearch } from "@lucide/astro";
+
+const entries = [...(ledger.entries ?? [])].filter((entry: any) => entry?.date && Array.isArray(entry?.items)).sort((left: any, right: any) => right.date.localeCompare(left.date));
+const current = entries[0];
+const previous = entries[1] ?? null;
+const key = (item: any) => `${item.category ?? "마켓"}::${item.title ?? ""}`;
+const now = current?.items ?? [];
+const before = previous?.items ?? [];
+const beforeKeys = new Set(before.map(key));
+const currentKeys = new Set(now.map(key));
+const newItems = now.filter((item: any) => !beforeKeys.has(key(item)));
+const carriedItems = now.filter((item: any) => beforeKeys.has(key(item)));
+const fadedCategories = [...new Set(before.filter((item: any) => !currentKeys.has(key(item))).map((item: any) => item.category || "마켓"))];
+const newCategories = [...new Set(newItems.map((item: any) => item.category || "마켓"))];
+---
+
+{current && (
+  <section class="news-delta" aria-labelledby="news-delta-title">
+    <section class="news-delta-card card">
+      <header>
+        <div>
+          <p><ScanSearch size={14} /> NEWS DELTA</p>
+          <h2 id="news-delta-title">뉴스 기록에서 달라진 점</h2>
+          <span>{previous ? `${previous.date} 대비 ${current.date} 수집 기록` : `${current.date} 최초 이벤트 기록`}</span>
+        </div>
+        <div class="news-delta-count"><Newspaper size={15} /> {now.length}건 기록</div>
+      </header>
+      <div class="news-delta-grid">
+        <article><CirclePlus size={15} /><span>새 헤드라인</span><strong>{newItems.length}</strong><small>{newCategories.length ? newCategories.join(" · ") : "초기 기록 대기"}</small></article>
+        <article><Repeat2 size={15} /><span>반복 헤드라인</span><strong>{carriedItems.length}</strong><small>{carriedItems.length ? "같은 제목이 이전 기록에도 존재" : "반복된 제목 없음"}</small></article>
+        <article><ScanSearch size={15} /><span>이번에 줄어든 카테고리</span><strong>{fadedCategories.length}</strong><small>{fadedCategories.length ? fadedCategories.join(" · ") : "이전 기록과의 비교 대기"}</small></article>
+      </div>
+      <p>제목과 카테고리의 날짜별 차이만 계산합니다. 사건의 신규성·중요성·사실성·가격 영향이나 원인을 판단하지 않습니다.</p>
+    </section>
+  </section>
+)}
+
+<style>
+  .news-delta { margin:10px 0 16px; }.news-delta-card { padding:14px 16px; background:color-mix(in srgb,var(--card) 94%,#d59121 6%); }.news-delta-card header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }.news-delta-card header p { display:flex; align-items:center; gap:5px; margin:0 0 3px; color:var(--accent); font-family:var(--font-num); font-size:.63rem; font-weight:800; letter-spacing:.1em; }.news-delta-card h2 { margin:0; font-size:.98rem; letter-spacing:-.02em; }.news-delta-card header span { display:block; margin-top:4px; color:var(--sub); font-size:.67rem; }.news-delta-count { display:flex; align-items:center; gap:5px; flex:none; padding:5px 8px; border:1px solid var(--border); border-radius:7px; color:var(--sub); font-size:.67rem; font-weight:700; }.news-delta-count svg { color:var(--accent); }.news-delta-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin:11px 0 8px; }.news-delta-grid article { display:grid; grid-template-columns:auto 1fr; align-items:center; column-gap:5px; padding:9px; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb,var(--bg) 18%,var(--card)); }.news-delta-grid svg { color:var(--accent); }.news-delta-grid span { color:var(--sub); font-size:.63rem; font-weight:700; }.news-delta-grid strong { grid-column:2; color:var(--text); font-family:var(--font-num); font-size:1rem; }.news-delta-grid small { grid-column:1 / -1; margin-top:4px; color:var(--sub); font-size:.6rem; line-height:1.4; }.news-delta-card > p { margin:0; color:var(--sub); font-size:.66rem; line-height:1.45; }
+  @media (max-width:600px) { .news-delta-card { padding:13px; }.news-delta-card header { flex-direction:column; }.news-delta-grid { grid-template-columns:1fr; } }
+</style>

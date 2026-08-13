@@ -2,7 +2,7 @@
 import "../styles/global.css";
 import ChartModal from "../components/ChartModal.astro";
 import { base } from "../lib/base";
-import { TrendingUp, Archive, LayoutGrid, Radar, SlidersHorizontal, Sun, Moon } from "@lucide/astro";
+import { TrendingUp, Archive, CalendarDays, LayoutGrid, Radar, SlidersHorizontal, Sun, Moon } from "@lucide/astro";
 
 const { title = "아침 시장 브리핑", description = "미국·한국 증시 일일 맞춤 브리핑" } = Astro.props;
 const path = Astro.url.pathname;
@@ -82,6 +82,14 @@ const canonical = Astro.site ? new URL(path, Astro.site).href : null;
           >
             <Archive size={15} />
             <span class="nav-label">아카이브</span>
+          </a>
+          <a
+            href={`${base}reviews/`}
+            class:list={["nav-link", { active: isActive("reviews") }]}
+            aria-current={isActive("reviews") ? "page" : undefined}
+          >
+            <CalendarDays size={15} />
+            <span class="nav-label">회고</span>
           </a>
           <button id="theme-toggle" type="button" aria-label="라이트 모드 전환" aria-pressed="false" title="다크/라이트 모드 전환">
             <Sun size={16} class="icon-sun" />

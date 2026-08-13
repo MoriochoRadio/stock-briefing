@@ -1,0 +1,71 @@
+---
+import { BarChart3, BookOpenText, CalendarDays, ChartNoAxesCombined, ChevronRight, Eye, Layers3, Newspaper, SlidersHorizontal } from "@lucide/astro";
+import { base } from "../lib/base";
+
+const links = [
+  { href: "#focus", label: "핵심 신호", icon: Eye },
+  { href: "#workspace", label: "나의 데스크", icon: SlidersHorizontal },
+  { href: "#intraday", label: "한국장", icon: BarChart3 },
+  { href: "#relative-strength", label: "상대 강도", icon: ChartNoAxesCombined },
+  { href: "#market-replay", label: "리플레이", icon: Layers3 },
+  { href: "#news", label: "뉴스", icon: Newspaper },
+  { href: "#narrative-delta", label: "브리핑 변화", icon: BookOpenText },
+  { href: `${base}archive/`, label: "기록 비교", icon: CalendarDays },
+  { href: `${base}reviews/`, label: "주간 회고", icon: CalendarDays },
+];
+---
+
+<nav class="intel-rail" data-intel-rail aria-label="시장 인텔리전스 빠른 탐색">
+  <div class="intel-rail-top">
+    <span class="intel-rail-label"><BookOpenText size={14} /> INTELLIGENCE MAP</span>
+    <div class="density-switch" role="group" aria-label="정보 밀도 선택">
+      <button type="button" data-density="full" class="active" aria-pressed="true">전체</button>
+      <button type="button" data-density="focus" aria-pressed="false">핵심만</button>
+    </div>
+  </div>
+  <div class="intel-rail-scroll">
+    <div class="intel-rail-links">
+      {links.map((link) => {
+        const Icon = link.icon;
+        return <a href={link.href} class="intel-rail-link"><Icon size={14} /><span>{link.label}</span><ChevronRight size={12} /></a>;
+      })}
+    </div>
+  </div>
+  <p class="intel-rail-note" data-density-note>전체 분석 흐름을 보며, 필요한 영역으로 빠르게 이동할 수 있습니다.</p>
+</nav>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-intel-rail]");
+  if (root) {
+    const key = "stock-briefing:reading-density";
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-density]"));
+    const note = root.querySelector<HTMLElement>("[data-density-note]");
+    const targets = Array.from(document.querySelectorAll<HTMLElement>("[data-density-section]"));
+    const apply = (mode: string) => {
+      const focus = mode === "focus";
+      document.documentElement.dataset.density = focus ? "focus" : "full";
+      targets.forEach((target) => {
+        const optional = target.dataset.densitySection === "optional";
+        target.hidden = focus && optional;
+      });
+      buttons.forEach((button) => {
+        const active = button.dataset.density === mode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      if (note) note.textContent = focus
+        ? "핵심 신호·개인 데스크·장중 흐름·오늘의 브리핑만 표시합니다. 언제든 전체 분석으로 돌아올 수 있습니다."
+        : "전체 분석 흐름을 보며, 필요한 영역으로 빠르게 이동할 수 있습니다.";
+      try { localStorage.setItem(key, mode); } catch (_) {}
+    };
+    let mode = "full";
+    try { mode = localStorage.getItem(key) === "focus" ? "focus" : "full"; } catch (_) {}
+    apply(mode);
+    buttons.forEach((button) => button.addEventListener("click", () => apply(button.dataset.density ?? "full")));
+  }
+</script>
+
+<style>
+  .intel-rail { position:relative; margin:14px 0 18px; padding:10px 12px 9px; border:1px solid var(--border); border-radius:13px; background:color-mix(in srgb,var(--card) 89%,var(--bg)); box-shadow:inset 0 1px 0 var(--hairline); }.intel-rail-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }.intel-rail-label { display:inline-flex; align-items:center; gap:6px; color:var(--accent); font-family:var(--font-num); font-size:.65rem; font-weight:800; letter-spacing:.1em; }.density-switch { display:inline-flex; gap:3px; padding:2px; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb,var(--bg) 35%,transparent); }.density-switch button { padding:4px 8px; border:0; border-radius:5px; color:var(--sub); background:transparent; font-size:.66rem; font-weight:800; cursor:pointer; }.density-switch button.active { color:var(--text); background:var(--card); box-shadow:0 1px 3px color-mix(in srgb,#000 15%,transparent); }.density-switch button:focus-visible,.intel-rail-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }.intel-rail-scroll { margin:9px -2px 0; overflow-x:auto; scrollbar-width:thin; }.intel-rail-links { display:flex; gap:6px; min-width:max-content; padding:0 2px 3px; }.intel-rail-link { display:inline-flex; align-items:center; gap:5px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; color:var(--sub); background:color-mix(in srgb,var(--bg) 22%,transparent); font-size:.7rem; font-weight:700; text-decoration:none; white-space:nowrap; transition:.15s ease; }.intel-rail-link svg:first-child { color:var(--accent); }.intel-rail-link svg:last-child { opacity:.45; }.intel-rail-link:hover { color:var(--text); border-color:color-mix(in srgb,var(--accent) 48%,var(--border)); background:color-mix(in srgb,var(--accent) 9%,transparent); }.intel-rail-note { margin:8px 2px 0; color:var(--sub); font-size:.69rem; line-height:1.4; }
+  @media (max-width:560px) { .intel-rail { margin-top:10px; padding:9px 10px; }.intel-rail-label { font-size:.6rem; }.intel-rail-note { font-size:.65rem; }.intel-rail-links { gap:5px; }.intel-rail-link { padding:6px 7px; } }
+</style>

@@ -1,0 +1,55 @@
+---
+import ledger from "../data/event_ledger.json";
+import { CalendarClock, ExternalLink, History, Tags } from "@lucide/astro";
+
+const entries = [...(ledger.entries ?? [])].filter((entry: any) => entry?.date && Array.isArray(entry?.items)).sort((left: any, right: any) => right.date.localeCompare(left.date)).slice(0, 7);
+const categoryCount = (items: any[]) => Object.entries(items.reduce((acc: Record<string, number>, item: any) => { const key = item.category || "마켓"; acc[key] = (acc[key] ?? 0) + 1; return acc; }, {})).sort((left, right) => Number(right[1]) - Number(left[1]));
+---
+
+{entries.length > 0 && (
+  <section id="event-timeline" class="event-timeline" data-event-timeline aria-labelledby="event-timeline-title">
+    <div class="eyebrow"><span class="tag">LEDGER</span> 이벤트 기록 <span class="line"></span></div>
+    <section class="event-card card">
+      <header class="event-head">
+        <div>
+          <p class="event-cap"><CalendarClock size={14} /> MARKET EVENT LEDGER</p>
+          <h2 id="event-timeline-title">수집된 뉴스의 날짜별 기록</h2>
+          <p>매일 수집된 헤드라인을 <b>카테고리·출처·원문 링크</b>와 함께 보존합니다. 가격 움직임의 원인을 확정하거나 중요도를 순위화하지 않습니다.</p>
+        </div>
+        <span class="event-coverage"><History size={14} /> 최근 {entries.length}일 기록</span>
+      </header>
+      <div class="event-days" role="tablist" aria-label="이벤트 기록 날짜">
+        {entries.map((entry: any, index: number) => <button type="button" role="tab" data-event-date={entry.date} aria-selected={index === 0 ? "true" : "false"}>{entry.date.slice(5).replace("-", ".")}</button>)}
+      </div>
+      <div class="event-body" aria-live="polite">
+        {entries.map((entry: any, index: number) => (
+          <article data-event-panel={entry.date} hidden={index !== 0}>
+            <div class="event-meta"><span>{entry.date} 수집 기록</span><div>{categoryCount(entry.items).slice(0, 4).map(([category, count]) => <span class="event-category">{category} {count}</span>)}</div></div>
+            <ul>
+              {entry.items.slice(0, 6).map((item: any) => <li><span class="event-dot"></span><a href={item.link} target="_blank" rel="noopener noreferrer"><b>{item.category || "마켓"}</b><span>{item.title}</span><small>{item.source || "출처 미표기"} <ExternalLink size={11} /></small></a></li>)}
+            </ul>
+          </article>
+        ))}
+      </div>
+      <footer><Tags size={14} /> 이벤트 기록은 현재 사이트가 수집한 헤드라인으로부터 시작합니다. 과거 날짜는 기록 생성 이후부터 누적되며, 출처가 제공되지 않은 항목은 출처 미표기로 표시합니다.</footer>
+    </section>
+  </section>
+)}
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-event-timeline]");
+  if (root) {
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-event-date]"));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>("[data-event-panel]"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      const selected = button.dataset.eventDate;
+      buttons.forEach((item) => item.setAttribute("aria-selected", String(item === button)));
+      panels.forEach((panel) => { panel.hidden = panel.dataset.eventPanel !== selected; });
+    }));
+  }
+</script>
+
+<style>
+  .event-timeline { margin:19px 0; }.event-card { padding:19px; background:linear-gradient(140deg,color-mix(in srgb,var(--card) 91%,#8e63ef 9%),var(--card)); }.event-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }.event-cap { display:flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.66rem; font-weight:800; letter-spacing:.11em; }.event-head h2 { margin:0; font-size:1.12rem; letter-spacing:-.025em; }.event-head p:not(.event-cap) { max-width:61ch; margin:6px 0 0; color:var(--sub); font-size:.8rem; line-height:1.6; }.event-head p b { color:var(--text); }.event-coverage { display:flex; align-items:center; gap:5px; flex:none; padding:6px 9px; border:1px solid var(--border); border-radius:999px; color:var(--sub); font-size:.67rem; font-weight:700; }.event-days { display:flex; gap:5px; margin:14px 0 9px; overflow-x:auto; padding-bottom:3px; }.event-days button { flex:none; padding:6px 9px; border:1px solid var(--border); border-radius:7px; color:var(--sub); background:color-mix(in srgb,var(--bg) 22%,var(--card)); font-family:var(--font-num); font-size:.7rem; font-weight:800; cursor:pointer; }.event-days button[aria-selected="true"] { color:var(--text); border-color:color-mix(in srgb,var(--accent) 58%,var(--border)); background:color-mix(in srgb,var(--accent) 12%,var(--card)); }.event-days button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }.event-body { border:1px solid var(--border); border-radius:10px; background:color-mix(in srgb,var(--bg) 17%,var(--card)); }.event-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 11px; border-bottom:1px solid var(--border); color:var(--sub); font-family:var(--font-num); font-size:.68rem; }.event-meta div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; }.event-category { padding:3px 5px; border:1px solid var(--border); border-radius:5px; color:var(--text); background:var(--card); font-size:.6rem; font-weight:700; }.event-body ul { list-style:none; margin:0; padding:2px 9px; }.event-body li { display:grid; grid-template-columns:12px 1fr; gap:6px; padding:8px 1px; }.event-body li + li { border-top:1px solid var(--border-soft); }.event-dot { width:5px; height:5px; margin-top:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent); }.event-body a { display:grid; grid-template-columns:auto 1fr auto; align-items:baseline; gap:7px; color:var(--text); text-decoration:none; font-size:.75rem; line-height:1.45; }.event-body a:hover span { color:var(--accent); }.event-body a b { color:var(--accent); font-size:.64rem; white-space:nowrap; }.event-body a span { transition:color .15s ease; }.event-body a small { display:inline-flex; align-items:center; gap:3px; color:var(--sub); font-size:.62rem; white-space:nowrap; }.event-card footer { display:flex; align-items:flex-start; gap:5px; margin-top:10px; color:var(--sub); font-size:.67rem; line-height:1.5; }.event-card footer svg { flex:none; margin-top:1px; color:var(--accent); }
+  @media (max-width:650px) { .event-card { padding:16px; }.event-head { flex-direction:column; }.event-meta { align-items:flex-start; flex-direction:column; }.event-meta div { justify-content:flex-start; }.event-body a { grid-template-columns:auto 1fr; }.event-body a small { grid-column:2; } }
+</style>

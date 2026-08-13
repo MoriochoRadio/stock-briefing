@@ -1,0 +1,104 @@
+---
+import { getCollection } from "astro:content";
+import { ArrowLeftRight, BookOpenCheck, CirclePlus, Repeat2, TrendingDown } from "@lucide/astro";
+import { base } from "../lib/base";
+
+const THEME_DEFS = [
+  { id: "semiconductor", label: "반도체", terms: ["반도체", "semiconductor", "chip"] },
+  { id: "ai", label: "AI·데이터센터", terms: ["ai", "인공지능", "데이터센터", "datacenter", "capex"] },
+  { id: "memory", label: "메모리·HBM", terms: ["메모리", "hbm", "dram", "낸드", "micron"] },
+  { id: "fx", label: "환율·외국인", terms: ["환율", "원/달러", "외국인", "krw"] },
+  { id: "macro", label: "매크로·금리", terms: ["cpi", "인플레이션", "연준", "fed", "금리"] },
+  { id: "supply", label: "수급·공급", terms: ["수급", "공급", "부족", "재고", "수출"] },
+  { id: "policy", label: "정책·규제", terms: ["정책", "정부", "규제", "관세", "지원"] },
+  { id: "risk", label: "리스크", terms: ["리스크", "위험", "변동성", "과열", "하락"] },
+];
+const all = (await getCollection("briefings")).sort((left, right) => right.id.localeCompare(left.id)).slice(0, 30);
+const records = all.map((entry) => {
+  const text = String(entry.body ?? "").toLowerCase();
+  const themes = THEME_DEFS.filter((theme) => theme.terms.some((term) => text.includes(term.toLowerCase()))).map((theme) => theme.id);
+  return { id: entry.id, themes };
+});
+const initialCurrent = records[0];
+const initialPrevious = records.at(1) ?? records[0];
+const labels = Object.fromEntries(THEME_DEFS.map((theme) => [theme.id, theme.label]));
+const diff = (current: any, previous: any) => {
+  const currentSet = new Set(current?.themes ?? []), previousSet = new Set(previous?.themes ?? []);
+  return {
+    introduced: [...currentSet].filter((id) => !previousSet.has(id)),
+    carried: [...currentSet].filter((id) => previousSet.has(id)),
+    faded: [...previousSet].filter((id) => !currentSet.has(id)),
+  };
+};
+const initial = diff(initialCurrent, initialPrevious);
+---
+
+{records.length > 1 && (
+  <section id="narrative-delta" class="narrative-delta" data-narrative-delta aria-labelledby="narrative-delta-title">
+    <div class="eyebrow"><span class="tag">DELTA</span> 브리핑 변화 <span class="line"></span></div>
+    <section class="narrative-card card">
+      <header class="narrative-head">
+        <div>
+          <p class="narrative-cap"><BookOpenCheck size={14} /> NARRATIVE DELTA</p>
+          <h2 id="narrative-delta-title">브리핑에서 무엇이 달라졌나</h2>
+          <p>날짜별 브리핑의 <b>구조화된 주제 언급</b>을 비교해 새로 부각된 항목, 계속 관찰되는 항목, 이번에는 줄어든 항목을 나눠 봅니다.</p>
+        </div>
+        <a class="narrative-archive" href={`${base}archive/`}><ArrowLeftRight size={14} /> 가격 기록 비교</a>
+      </header>
+      <div class="narrative-controls">
+        <label>기준 브리핑
+          <select data-delta-current>
+            {records.map((record) => <option value={record.id} selected={record.id === initialCurrent?.id}>{record.id}</option>)}
+          </select>
+        </label>
+        <div class="narrative-arrow" aria-hidden="true"><ArrowLeftRight size={16} /></div>
+        <label>비교 브리핑
+          <select data-delta-previous>
+            {records.map((record) => <option value={record.id} selected={record.id === initialPrevious?.id}>{record.id}</option>)}
+          </select>
+        </label>
+      </div>
+      <div class="delta-grid" aria-live="polite">
+        <article class="delta-card introduced"><header><CirclePlus size={15} /><span>새로 부각</span></header><div data-delta-introduced>{initial.introduced.length ? initial.introduced.map((id) => <span class="theme-pill">{labels[id]}</span>) : <em>새로운 구조화 테마 없음</em>}</div></article>
+        <article class="delta-card carried"><header><Repeat2 size={15} /><span>계속 관찰</span></header><div data-delta-carried>{initial.carried.length ? initial.carried.map((id) => <span class="theme-pill">{labels[id]}</span>) : <em>겹치는 구조화 테마 없음</em>}</div></article>
+        <article class="delta-card faded"><header><TrendingDown size={15} /><span>이번에는 약화</span></header><div data-delta-faded>{initial.faded.length ? initial.faded.map((id) => <span class="theme-pill">{labels[id]}</span>) : <em>약화된 구조화 테마 없음</em>}</div></article>
+      </div>
+      <p class="narrative-foot">이 비교는 키워드·주제 사전 기반의 언급 변화이며, 뉴스의 중요도·사실성·영향도를 자동 판정하거나 미래 흐름을 예측하지 않습니다.</p>
+    </section>
+    <script type="application/json" id="narrative-delta-data" set:html={JSON.stringify({ records, labels })} />
+  </section>
+)}
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-narrative-delta]");
+  const source = document.getElementById("narrative-delta-data");
+  if (root && source) {
+    const { records, labels } = JSON.parse(source.textContent ?? "{}");
+    const currentSelect = root.querySelector<HTMLSelectElement>("[data-delta-current]");
+    const previousSelect = root.querySelector<HTMLSelectElement>("[data-delta-previous]");
+    const renderPills = (selector: string, ids: string[], empty: string) => {
+      const holder = root.querySelector<HTMLElement>(selector);
+      if (!holder) return;
+      holder.replaceChildren();
+      if (!ids.length) { const message = document.createElement("em"); message.textContent = empty; holder.append(message); return; }
+      ids.forEach((id) => { const pill = document.createElement("span"); pill.className = "theme-pill"; pill.textContent = labels[id] ?? id; holder.append(pill); });
+    };
+    const render = () => {
+      const current = records.find((record: any) => record.id === currentSelect?.value) ?? records[0];
+      const previous = records.find((record: any) => record.id === previousSelect?.value) ?? records[1];
+      const now = new Set(current?.themes ?? []), before = new Set(previous?.themes ?? []);
+      renderPills("[data-delta-introduced]", [...now].filter((id) => !before.has(id)), "새로운 구조화 테마 없음");
+      renderPills("[data-delta-carried]", [...now].filter((id) => before.has(id)), "겹치는 구조화 테마 없음");
+      renderPills("[data-delta-faded]", [...before].filter((id) => !now.has(id)), "약화된 구조화 테마 없음");
+    };
+    currentSelect?.addEventListener("change", render);
+    previousSelect?.addEventListener("change", render);
+  }
+</script>
+
+<style>
+  .narrative-delta { margin:18px 0; }.narrative-card { padding:19px; overflow:hidden; background:linear-gradient(142deg,color-mix(in srgb,var(--card) 91%,#d59121 9%),var(--card)); }.narrative-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }.narrative-cap { display:inline-flex; align-items:center; gap:6px; margin:0 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.66rem; font-weight:800; letter-spacing:.11em; }.narrative-head h2 { margin:0; font-size:1.12rem; letter-spacing:-.025em; }.narrative-head p:not(.narrative-cap) { max-width:60ch; margin:6px 0 0; color:var(--sub); font-size:.8rem; line-height:1.6; }.narrative-head p b { color:var(--text); }.narrative-archive { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 9px; border:1px solid var(--border); border-radius:8px; color:var(--sub); background:color-mix(in srgb,var(--bg) 25%,transparent); font-size:.7rem; font-weight:700; text-decoration:none; }.narrative-archive:hover { color:var(--accent); border-color:color-mix(in srgb,var(--accent) 44%,var(--border)); }
+  .narrative-controls { display:grid; grid-template-columns:1fr 25px 1fr; align-items:end; gap:8px; margin:15px 0 11px; padding:10px; border:1px solid var(--border); border-radius:11px; background:color-mix(in srgb,var(--bg) 22%,var(--card)); }.narrative-controls label { display:grid; gap:5px; color:var(--sub); font-size:.68rem; font-weight:700; }.narrative-controls select { height:33px; padding:0 8px; border:1px solid var(--border); border-radius:7px; color:var(--text); background:var(--card); font-family:var(--font-num); font-size:.75rem; }.narrative-controls select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }.narrative-arrow { display:grid; place-items:center; height:33px; color:var(--accent); }
+  .delta-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }.delta-card { min-height:107px; padding:11px; border:1px solid var(--border); border-radius:10px; background:color-mix(in srgb,var(--card) 93%,var(--bg)); }.delta-card header { display:flex; align-items:center; gap:5px; margin-bottom:9px; font-size:.72rem; font-weight:800; }.delta-card header svg { width:14px; }.delta-card.introduced header { color:var(--up); }.delta-card.carried header { color:var(--accent); }.delta-card.faded header { color:var(--sub); }.delta-card > div { display:flex; flex-wrap:wrap; gap:5px; }.theme-pill { padding:4px 6px; border:1px solid var(--border); border-radius:6px; color:var(--text); background:color-mix(in srgb,var(--bg) 28%,transparent); font-size:.67rem; font-weight:700; }.delta-card em { color:var(--sub); font-size:.67rem; font-style:normal; line-height:1.45; }.narrative-foot { margin:10px 1px 0; color:var(--sub); font-size:.68rem; line-height:1.5; }
+  @media (max-width:620px) { .narrative-card { padding:16px; }.narrative-head { flex-direction:column; }.delta-grid { grid-template-columns:1fr; }.delta-card { min-height:auto; }.narrative-controls { grid-template-columns:1fr; }.narrative-arrow { transform:rotate(90deg); } }
+</style>

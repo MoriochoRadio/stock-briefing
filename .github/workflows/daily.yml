@@ -42,12 +42,16 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/generate.py
 
-      - name: Commit briefing, data and quality metadata
+      - name: Generate current weekly and monthly reviews
+        if: github.event_name != 'push'
+        run: python scripts/generate_reviews.py
+
+      - name: Commit briefing, data, event ledger and reviews
         if: github.event_name != 'push'
         run: |
           git config user.name "briefing-bot"
           git config user.email "actions@github.com"
-          git add briefings site/src/data/history.json site/src/data/series.json site/src/data/sentiment.json site/src/data/news.json site/src/data/quality.json
+          git add briefings reviews site/src/data/history.json site/src/data/series.json site/src/data/sentiment.json site/src/data/news.json site/src/data/event_ledger.json site/src/data/quality.json
           git diff --cached --quiet || git commit -m "briefing: $(date -u -d '+9 hours' +'%Y-%m-%d')"
           ok=""
           for i in 1 2 3 4 5; do

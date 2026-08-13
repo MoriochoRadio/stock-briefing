@@ -1,0 +1,36 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { ArrowUpRight, CalendarDays, History, LineChart } from "@lucide/astro";
+import { base } from "../../lib/base";
+
+const weekly = (await getCollection("weeklyReviews")).sort((left, right) => right.id.localeCompare(left.id));
+const monthly = (await getCollection("monthlyReviews")).sort((left, right) => right.id.localeCompare(left.id));
+const label = (id: string, type: "weekly" | "monthly") => type === "weekly" ? `${id.replace(/-w/i, "년 ")}주차` : `${id.replace("-", "년 ")}월`;
+---
+
+<Base title="시장 회고 — 아침 시장 브리핑">
+  <header class="review-hero">
+    <p class="hero-eyebrow">REVIEW ARCHIVE</p>
+    <h1>시장 기록, 기간별로 다시 보기</h1>
+    <p>수집된 종가와 보존된 뉴스 이벤트를 바탕으로 생성한 <b>주간·월간 시장 회고</b>입니다. 모든 변화율은 기간 첫·마지막 수집 종가 비교입니다.</p>
+    <div class="review-stats"><span><History size={15} /> 주간 {weekly.length}건</span><span><CalendarDays size={15} /> 월간 {monthly.length}건</span><span><LineChart size={15} /> 예측·매매 신호 없음</span></div>
+  </header>
+
+  <section class="review-section">
+    <div class="eyebrow"><span class="tag">WEEKLY</span> 주간 회고 <span class="line"></span></div>
+    {weekly.length ? <div class="review-grid">{weekly.map((review, index) => <a class="review-link card card-lift" data-reveal data-glow style={`--i:${index}`} href={`${base}reviews/weekly/${review.id}/`}><div><small>WEEKLY REVIEW</small><strong>{label(review.id, "weekly")}</strong><span>가격·이벤트 기록 보기</span></div><ArrowUpRight size={18} /></a>)}</div> : <p class="review-empty">아직 생성된 주간 회고가 없습니다.</p>}
+  </section>
+
+  <section class="review-section">
+    <div class="eyebrow"><span class="tag">MONTHLY</span> 월간 회고 <span class="line"></span></div>
+    {monthly.length ? <div class="review-grid">{monthly.map((review, index) => <a class="review-link card card-lift" data-reveal data-glow style={`--i:${index}`} href={`${base}reviews/monthly/${review.id}/`}><div><small>MONTHLY REVIEW</small><strong>{label(review.id, "monthly")}</strong><span>가격·이벤트 기록 보기</span></div><ArrowUpRight size={18} /></a>)}</div> : <p class="review-empty">아직 생성된 월간 회고가 없습니다.</p>}
+  </section>
+
+  <aside class="review-note card"><History size={16} /><p>주간·월간 회고는 매일 자동 갱신되는 수집 데이터로 결정론적으로 생성됩니다. 이벤트 기록은 기능 도입 이후부터 누적되며, 뉴스 헤드라인은 가격 변화의 원인이나 중요도 순위를 뜻하지 않습니다.</p></aside>
+</Base>
+
+<style>
+  .review-hero { position:relative; margin:0 0 24px; padding:26px; overflow:hidden; border:1px solid var(--border); border-radius:calc(var(--radius) + 3px); background:linear-gradient(135deg,color-mix(in srgb,var(--card) 90%,#8e63ef 10%),var(--card)); }.review-hero::after { content:""; position:absolute; width:220px; height:220px; right:-76px; bottom:-118px; border-radius:50%; background:radial-gradient(circle,color-mix(in srgb,var(--accent) 22%,transparent),transparent 66%); }.review-hero > * { position:relative; z-index:1; }.review-hero h1 { margin:5px 0 8px; letter-spacing:-.04em; font-size:clamp(1.45rem,3.7vw,2rem); }.review-hero > p:not(.hero-eyebrow) { max-width:66ch; margin:0; color:var(--sub); font-size:.88rem; line-height:1.65; }.review-hero b { color:var(--text); }.review-stats { display:flex; flex-wrap:wrap; gap:7px; margin-top:15px; }.review-stats span { display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid var(--border); border-radius:8px; color:var(--sub); background:color-mix(in srgb,var(--bg) 20%,transparent); font-size:.7rem; font-weight:700; }.review-stats svg { color:var(--accent); }.review-section { margin:23px 0; }.review-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:9px; }.review-link { display:flex; align-items:center; justify-content:space-between; min-height:99px; padding:15px; color:var(--text); text-decoration:none; }.review-link small,.review-link span { display:block; color:var(--sub); font-size:.65rem; }.review-link small { color:var(--accent); font-family:var(--font-num); font-weight:800; letter-spacing:.1em; }.review-link strong { display:block; margin:5px 0 4px; font-size:.95rem; }.review-link > svg { color:var(--accent); transition:transform .18s ease; }.review-link:hover > svg { transform:translate(2px,-2px); }.review-empty { padding:15px; border:1px dashed var(--border); border-radius:10px; color:var(--sub); font-size:.8rem; }.review-note { display:flex; align-items:flex-start; gap:7px; margin:24px 0 0; padding:13px; color:var(--sub); font-size:.75rem; line-height:1.55; }.review-note p { margin:0; }.review-note svg { flex:none; margin-top:1px; color:var(--accent); }
+  @media (max-width:560px) { .review-hero { padding:20px; }.review-grid { grid-template-columns:1fr; } }
+</style>

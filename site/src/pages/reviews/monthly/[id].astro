@@ -1,0 +1,29 @@
+---
+import { getCollection, render } from "astro:content";
+import Base from "../../../layouts/Base.astro";
+import BriefingArticle from "../../../components/BriefingArticle.astro";
+import { ArrowLeft, CalendarDays } from "@lucide/astro";
+import { base } from "../../../lib/base";
+
+export async function getStaticPaths() {
+  const reviews = await getCollection("monthlyReviews");
+  return reviews.map((review) => ({ params: { id: review.id }, props: { review } }));
+}
+
+const { review } = Astro.props;
+const { Content } = await render(review);
+---
+
+<Base title={`${review.id} 월간 회고 — 아침 시장 브리핑`}>
+  <header class="review-detail-head">
+    <a href={`${base}reviews/`}><ArrowLeft size={15} /> 회고 목록</a>
+    <p><CalendarDays size={14} /> MONTHLY REVIEW</p>
+    <h1>{review.id.replace("-", "년 ")}월 시장 회고</h1>
+    <span>수집된 가격·뉴스 이벤트 기록을 바탕으로 생성</span>
+  </header>
+  <BriefingArticle><Content /></BriefingArticle>
+</Base>
+
+<style>
+  .review-detail-head { margin:0 0 20px; padding:20px; border:1px solid var(--border); border-radius:var(--radius); background:color-mix(in srgb,var(--card) 92%,#d59121 8%); }.review-detail-head a { display:inline-flex; align-items:center; gap:5px; color:var(--sub); font-size:.75rem; font-weight:700; text-decoration:none; }.review-detail-head a:hover { color:var(--accent); }.review-detail-head p { display:flex; align-items:center; gap:6px; margin:14px 0 5px; color:var(--accent); font-family:var(--font-num); font-size:.67rem; font-weight:800; letter-spacing:.1em; }.review-detail-head h1 { margin:0; letter-spacing:-.035em; font-size:clamp(1.35rem,3vw,1.8rem); }.review-detail-head span { display:block; margin-top:6px; color:var(--sub); font-size:.76rem; }
+</style>
