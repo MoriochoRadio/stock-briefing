@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-28T15:05:25.134541+09:00",
-  "dateKst": "2026-08-28",
+  "generatedAt": "2026-08-29T12:42:22.859269+09:00",
+  "dateKst": "2026-08-29",
   "source": "Yahoo Finance via yfinance",
   "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
   "newsSource": "Google News RSS",
@@ -10,13 +10,13 @@
     "indices": {
       "label": "지수·환율",
       "expected": 5,
-      "received": 5,
-      "coveragePct": 100.0,
+      "received": 4,
+      "coveragePct": 80.0,
       "asOfDates": [
-        "2026-08-27",
-        "2026-08-28"
+        "2026-08-28",
+        "2026-08-29"
       ],
-      "status": "complete"
+      "status": "partial"
     },
     "watchlist_us": {
       "label": "미국 관심종목",
@@ -24,19 +24,17 @@
       "received": 6,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-08-27"
+        "2026-08-28"
       ],
       "status": "complete"
     },
     "watchlist_kr": {
       "label": "한국 관심종목",
       "expected": 4,
-      "received": 4,
-      "coveragePct": 100.0,
-      "asOfDates": [
-        "2026-08-28"
-      ],
-      "status": "complete"
+      "received": 0,
+      "coveragePct": 0.0,
+      "asOfDates": [],
+      "status": "partial"
     }
   }
 }
