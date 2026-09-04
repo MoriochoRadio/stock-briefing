@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-03T09:11:13.021878+09:00",
-  "dateKst": "2026-09-03",
+  "generatedAt": "2026-09-04T09:02:25.131608+09:00",
+  "dateKst": "2026-09-04",
   "source": "Yahoo Finance via yfinance",
   "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
   "newsSource": "Google News RSS",
@@ -13,9 +13,9 @@
       "received": 5,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-09-01",
         "2026-09-02",
-        "2026-09-03"
+        "2026-09-03",
+        "2026-09-04"
       ],
       "status": "complete"
     },
@@ -33,7 +33,7 @@
       "received": 4,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-09-02"
+        "2026-09-03"
       ],
       "status": "complete"
     }
