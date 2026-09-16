@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-15T09:35:22.866952+09:00",
-  "dateKst": "2026-09-15",
+  "generatedAt": "2026-09-16T09:14:55.882473+09:00",
+  "dateKst": "2026-09-16",
   "source": "Yahoo Finance via yfinance",
   "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
   "newsSource": "Google News RSS",
@@ -14,7 +14,8 @@
       "coveragePct": 100.0,
       "asOfDates": [
         "2026-09-14",
-        "2026-09-15"
+        "2026-09-15",
+        "2026-09-16"
       ],
       "status": "complete"
     },
