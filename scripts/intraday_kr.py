@@ -128,13 +128,17 @@ def market_line(market):
 
 
 def fmt_stock_for_prompt(s):
+    # 지표는 None일 수 있다(Yahoo 장중 봉의 시가 0·거래량 NaN, 상장 60일 남짓 등) — 포맷 TypeError로
+    # 스냅샷 전체가 죽지 않게 _num으로 'n/a' 처리(값이 있으면 기존과 같은 문자열).
+    rp = s.get("range_pos")
     return (
-        f"- {s['name']}: 현재 {s['close']:,} ({s['change_pct']:+.2f}%, 개장대비 {s['vs_open_pct']:+.2f}%) "
-        f"| 추세 {s['trend']}, 20일선대비 {s['vs_sma20_pct']:+.1f}% "
-        f"| RSI {s['rsi14']:.1f}({s['rsi_state']}, 전일 {s['rsi_prev']:.1f}) "
-        f"| MACD히스토 {s['macd_dir']} "
-        f"| 52주 위치 {s['range_pos']*100:.0f}%, 거래량 평소의 {s['vol_ratio']:.2f}배 "
-        f"| 20일 {s['ret_20d']:+.1f}%, 60일 {s['ret_60d']:+.1f}%"
+        f"- {s['name']}: 현재 {_num(s.get('close'), ',')} ({_num(s.get('change_pct'), '+.2f', '%')}, "
+        f"개장대비 {_num(s.get('vs_open_pct'), '+.2f', '%')}) "
+        f"| 추세 {s.get('trend')}, 20일선대비 {_num(s.get('vs_sma20_pct'), '+.1f', '%')} "
+        f"| RSI {_num(s.get('rsi14'), '.1f')}({s.get('rsi_state')}, 전일 {_num(s.get('rsi_prev'), '.1f')}) "
+        f"| MACD히스토 {s.get('macd_dir')} "
+        f"| 52주 위치 {_num(None if rp is None else rp * 100, '.0f', '%')}, 거래량 평소의 {_num(s.get('vol_ratio'), '.2f', '배')} "
+        f"| 20일 {_num(s.get('ret_20d'), '+.1f', '%')}, 60일 {_num(s.get('ret_60d'), '+.1f', '%')}"
     )
 
 
@@ -183,13 +187,16 @@ def close_prompt(tnow, stocks, market, us_ctx):
 def fallback_text(phase, stocks, market):
     """LLM 키 없을 때 데이터 기반 기본 텍스트."""
     parts = []
-    chg = sum(s["change_pct"] for s in stocks) / len(stocks) if stocks else 0
+    # LLM 폴백 경로도 같은 None 지표로 죽지 않게 가드(프롬프트와 동일).
+    chgs = [s["change_pct"] for s in stocks if s.get("change_pct") is not None]
+    chg = sum(chgs) / len(chgs) if chgs else 0
     mood = "위험회피" if chg <= -1 else "위험선호" if chg >= 1 else "중립"
     parts.append(f"[{PHASES.get(phase, phase)}] 현재 시장 성격: {mood} (반도체 평균 등락 {chg:+.2f}%).")
     for s in stocks:
         parts.append(
-            f"{s['name']}: {s['close']:,} ({s['change_pct']:+.2f}%, 개장대비 {s['vs_open_pct']:+.2f}%), "
-            f"{s['trend']}·RSI {s['rsi14']:.0f}({s['rsi_state']})·MACD {s['macd_dir']}."
+            f"{s['name']}: {_num(s.get('close'), ',')} ({_num(s.get('change_pct'), '+.2f', '%')}, "
+            f"개장대비 {_num(s.get('vs_open_pct'), '+.2f', '%')}), "
+            f"{s.get('trend')}·RSI {_num(s.get('rsi14'), '.0f')}({s.get('rsi_state')})·MACD {s.get('macd_dir')}."
         )
     mk = market_line(market)
     if mk != "(없음)":

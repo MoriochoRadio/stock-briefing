@@ -5,7 +5,8 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -54,12 +55,40 @@ def _hist(ticker, period="5d", tries=3):
     return None
 
 
-def fetch_quotes(items):
-    """최근 종가와 등락률. 실패하거나 값이 비정상(NaN)인 티커는 건너뜀."""
+# 한국 시장 오늘 봉이 '종가'로 확정되는 시각(KST). 정규장 15:30 마감(수능일 16:30) + Yahoo 지연
+# 15~20분 + 여유. 이보다 이르게 조회한 오늘 봉은 장중가다 — 모닝 cron(07:10)이 GitHub 지연으로
+# 09~10시에 돌면서 장중가가 history.json에 그날 '종가'로 영구 저장되던 원인.
+KR_CLOSE_FINAL = (17, 0)
+KR_INDEX_TICKERS = {"^KS11", "^KQ11", "^KS200"}
+
+
+def _is_kr_market(ticker):
+    t = (ticker or "").upper()
+    return t.endswith((".KS", ".KQ")) or t in KR_INDEX_TICKERS
+
+
+def _completed_bars(df, ticker, now=None):
+    """종가 기록용(history·series·섹터 등락): 한국 시장 티커는 장 마감 확정(KR_CLOSE_FINAL) 전에
+    조회한 오늘 봉을 빼고 직전 완결 봉까지만 남긴다 → 기준일은 전일로 정직하게 표시된다.
+    한국장 인트라데이 스냅샷은 일부러 장중 봉을 쓰므로 이 함수를 거치지 않고 _hist를 직접 쓴다."""
+    if df is None or not len(df) or not _is_kr_market(ticker):
+        return df
+    now = now or datetime.now(KST)
+    last = df.index[-1]
+    last_day = (last.tz_convert(KST) if last.tzinfo else last).date()
+    if last_day < now.date() or (now.hour, now.minute) >= KR_CLOSE_FINAL:
+        return df
+    print(f"[info] {ticker}: 오늘({last_day}) 봉은 장 마감 확정 전({now:%H:%M} KST) 장중가 — 종가 기록에서 제외, 직전 완결 봉 사용")
+    return df.iloc[:-1]
+
+
+def fetch_quotes(items, now=None):
+    """최근 종가와 등락률. 실패하거나 값이 비정상(NaN)인 티커는 건너뜀.
+    한국 시장 티커는 장 마감 확정 전이면 오늘 장중 봉 대신 직전 완결 봉(전일 종가) 기준."""
     out = []
     for item in items:
         try:
-            hist = _hist(item["ticker"])
+            hist = _completed_bars(_hist(item["ticker"]), item["ticker"], now)
             if hist is None or len(hist) < 2:
                 continue
             last, prev = float(hist["Close"].iloc[-1]), float(hist["Close"].iloc[-2])
@@ -80,8 +109,25 @@ def fetch_quotes(items):
     return out
 
 
-def fetch_news(queries, per_query):
-    """Google News RSS (무료, 키 불필요)"""
+def _pub_datetime(pub):
+    """RSS pubDate(RFC 822, 예: 'Tue, 29 Sep 2026 20:29:59 GMT') → aware datetime. 없거나 형식이 다르면 None."""
+    try:
+        dt = parsedate_to_datetime(pub)
+    except Exception:
+        return None
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def fetch_news(queries, per_query, max_age_hours=72, now=None):
+    """Google News RSS (무료, 키 불필요). 최근 max_age_hours 이내 기사만 쓴다.
+    Google News 검색은 관련도순이라 몇 달 된 기사(예: 152일 전 리포트)가 섞여 브리핑이 현재 분석처럼
+    인용하는 일이 있었다 — 검색어에 when:Nd를 붙이고, pubDate로 한 번 더 거른다(날짜 없는 기사도 제외).
+    기본 72h = 주말 이틀을 사이에 둔 브리핑에도 직전 흐름의 기사가 남는 폭(config news_max_age_hours)."""
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=max_age_hours)
+    when = f" when:{max(1, math.ceil(max_age_hours / 24))}d"
     out = []
     for q in queries:
         lang = q.get("lang", "ko")
@@ -92,27 +138,39 @@ def fetch_news(queries, per_query):
         )
         url = (
             "https://news.google.com/rss/search?q="
-            + urllib.parse.quote(q["q"])
+            + urllib.parse.quote(q["q"] + when)
             + "&" + urllib.parse.urlencode(params)
         )
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 root = ET.fromstring(r.read())
-            count = 0  # 쿼리별 지역 카운터(기존 O(n²) 전체 재집계 대신)
+            count = stale = 0  # 쿼리별 지역 카운터(기존 O(n²) 전체 재집계 대신)
             for it in root.iter("item"):
+                pub = it.findtext("pubDate") or ""
+                published = _pub_datetime(pub)
+                if published is None or published < cutoff:
+                    stale += 1
+                    continue
                 title = it.findtext("title") or ""
                 out.append({
                     "query": q["q"],
                     "title": title,
                     "link": it.findtext("link") or "",
-                    "pub": it.findtext("pubDate") or "",
+                    "pub": pub,
                 })
                 count += 1
                 if count >= per_query:
                     break
+            if not count:
+                print(f"[warn] news '{q['q']}': 최근 {max_age_hours}h 이내 기사 0건"
+                      f"(오래됐거나 날짜 없는 기사 {stale}건 제외) — 이 주제는 브리핑 근거에서 빠짐")
+            elif stale:
+                print(f"[info] news '{q['q']}': {max_age_hours}h 넘은/날짜 없는 기사 {stale}건 제외")
         except Exception as e:
             print(f"[warn] news '{q['q']}': {e}")
+    if queries and not out:
+        print(f"[warn] news: 최근 {max_age_hours}h 이내 기사 0건 — 브리핑·헤드라인이 기사 근거 없이 작성됨")
     return out
 
 
@@ -205,8 +263,35 @@ def write_quality(cfg, data, breadth_received=None):
     return quality
 
 
-def update_history(data, keep_days=120):
-    """site/src/data/history.json에 일별 스냅샷 누적 (대시보드 카드·차트용)"""
+def repair_kr_closes(history, series, max_gap=0.3):
+    """예전 실행이 한국장 중에 돌아 '오늘 장중가'를 그날 종가로 저장한 한국 시장 시세를 Yahoo 확정
+    종가로 고친다(자가 치유 — 추가 네트워크 없이 이번 실행의 series 일봉을 재사용).
+    series: 이번 실행에서 새로 받은 완결 일봉 {ticker: [[YYYY-MM-DD, close], ...]}.
+    대상은 수집일과 시세 기준일이 같은 한국 티커뿐(장 시작 전 수집분은 이미 전일 확정 종가).
+    종가가 다를 때만 고치고, 차이가 30%(가격제한폭)를 넘으면 액면분할 등 기준 변경으로 보고 건너뛴다."""
+    fixed = 0
+    for snap in history:
+        for q in snap.get("quotes", []):
+            ticker = q.get("ticker")
+            if not _is_kr_market(ticker) or q.get("date") != snap.get("date"):
+                continue
+            arr = (series or {}).get(ticker) or []
+            i = next((k for k, (d, _) in enumerate(arr) if d == q["date"]), None)
+            if not i:  # 해당 날짜가 없거나 전일 봉이 없으면 등락률을 다시 셀 수 없다
+                continue
+            close, prev = arr[i][1], arr[i - 1][1]
+            if close == q["close"] or not prev or abs(close / q["close"] - 1) > max_gap:
+                continue
+            q["close"], q["change_pct"] = close, round((close / prev - 1) * 100, 2)
+            fixed += 1
+    if fixed:
+        print(f"[fix] history: 장중가로 저장됐던 한국 시장 시세 {fixed}건을 Yahoo 확정 종가로 교정")
+    return fixed
+
+
+def update_history(data, keep_days=120, series=None):
+    """site/src/data/history.json에 일별 스냅샷 누적 (대시보드 카드·차트용).
+    series(이번 실행의 완결 일봉)가 있으면 과거 장중가 저장분을 확정 종가로 교정한다."""
     path = ROOT / "site" / "src" / "data" / "history.json"
     history = []
     if path.exists():
@@ -216,6 +301,7 @@ def update_history(data, keep_days=120):
             history = []
     # 과거에 잘못 기록된 NaN 항목까지 함께 정리해 자가 치유한다.
     history = [_clean_snapshot(h) for h in history]
+    repair_kr_closes(history, series)
     quotes = data["indices"] + data["watchlist_us"] + data["watchlist_kr"]
     snap = _clean_snapshot({"date": data["date_kst"], "quotes": quotes})
     history = [h for h in history if h["date"] != snap["date"]] + [snap]
@@ -226,16 +312,18 @@ def update_history(data, keep_days=120):
     print(f"history: {len(history)} day(s)")
 
 
-def build_series(cfg, period="1y"):
+def build_series(cfg, period="1y", now=None):
     """차트용 종목별 일봉 종가 시계열을 site/src/data/series.json에 기록.
-    스파크라인·지수 추이 차트가 '작업 이후'가 아닌 실제 과거 데이터를 쓰도록 한다."""
+    스파크라인·지수 추이 차트가 '작업 이후'가 아닌 실제 과거 데이터를 쓰도록 한다.
+    history와 같은 기준(한국 시장은 장 마감 확정 전 오늘 봉 제외)을 쓴다.
+    반환: 이번 실행에서 새로 받은 시계열(기존 파일 병합 전) — history 교정용."""
     path = ROOT / "site" / "src" / "data" / "series.json"
     items = cfg["indices"] + cfg["watchlist_us"] + cfg["watchlist_kr"]
     out = {}
     for item in items:
         t = item["ticker"]
         try:
-            hist = _hist(t, period=period)
+            hist = _completed_bars(_hist(t, period=period), t, now)
             if hist is None:
                 continue
             arr = []
@@ -248,6 +336,7 @@ def build_series(cfg, period="1y"):
                 out[t] = arr
         except Exception as e:
             print(f"[warn] series {t}: {e}")
+    fresh = dict(out)
     if out:
         path.parent.mkdir(parents=True, exist_ok=True)
         # 빈 응답으로 일부 티커가 빠져도 기존 series.json을 통째로 날리지 않도록 병합.
@@ -263,6 +352,7 @@ def build_series(cfg, period="1y"):
                 pass
         path.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding="utf-8")
         print(f"series: {len(out)} ticker(s)")
+    return fresh
 
 
 FNG_LABELS = {
@@ -455,16 +545,17 @@ def main():
         "generated_at": now.isoformat(),
         "date_kst": now.strftime("%Y-%m-%d"),
         "weekday_kr": "월화수목금토일"[now.weekday()],
-        "indices": fetch_quotes(cfg["indices"]),
-        "watchlist_us": fetch_quotes(cfg["watchlist_us"]),
-        "watchlist_kr": fetch_quotes(cfg["watchlist_kr"]),
-        "news": fetch_news(cfg["news_queries"], cfg.get("news_per_query", 5)),
+        "indices": fetch_quotes(cfg["indices"], now),
+        "watchlist_us": fetch_quotes(cfg["watchlist_us"], now),
+        "watchlist_kr": fetch_quotes(cfg["watchlist_kr"], now),
+        "news": fetch_news(cfg["news_queries"], cfg.get("news_per_query", 5), cfg.get("news_max_age_hours", 72)),
     }
     out = ROOT / "data.json"
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+    # series를 먼저 받아, 같은 완결 일봉으로 history의 과거 장중가 저장분까지 교정한다.
+    series = build_series(cfg, now=now)
     if data["indices"] or data["watchlist_us"] or data["watchlist_kr"]:
-        update_history(data)
-    build_series(cfg)
+        update_history(data, series=series)
     breadth = build_sentiment(cfg, data)
     build_news(data)
     build_event_ledger(data)

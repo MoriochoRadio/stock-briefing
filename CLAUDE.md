@@ -5,7 +5,7 @@ GitHub Actions가 하루 4회(🌅07:00 밤사이 미국장 + 한국장 🟢09:1
 
 ## 구조
 
-- `scripts/fetch_data.py` — yfinance 시세 + Google News RSS 수집 → `data.json`, 히스토리를 `site/src/data/history.json`에 누적
+- `scripts/fetch_data.py` — yfinance 시세 + Google News RSS 수집 → `data.json`, 히스토리를 `site/src/data/history.json`에 누적. 한국 시장 티커(.KS/.KQ/^KS11)는 17:00 KST 전이면 오늘 장중 봉을 빼고 직전 완결 봉을 종가로 기록(`_completed_bars` — history·series·섹터 공통, 인트라데이는 장중 봉이 목적이라 `_hist` 직접 사용)하고, 예전 장중가 저장분은 같은 실행의 series로 자가 교정(`repair_kr_closes`). 뉴스는 최근 `news_max_age_hours`(기본 72h) 이내만, 0건이면 `[warn]`.
 - `scripts/generate.py` — 모닝 브리핑(밤사이 미국장). LLM(기본 Gemini 2.5 Flash + thinking, 옵션 Claude Opus 4.8) → `briefings/YYYY-MM-DD.md`. 엔진 선택은 `config.yaml`의 `llm.provider`. 엔진 호출은 `run_llm()`로 분리(인트라데이와 공유). 시세+시장분위기(공포탐욕·섹터)+뉴스 주입. Gemini 모델은 **자가 선택**(`call_gemini`: 설정 모델 → `/models` 목록의 최신 정식 flash → flash-lite → 그 외 flash, 404/모델 오류면 다음 후보, 성공 모델은 런 동안 고정) — 실제 사용 모델과 '사람 조치 필요' 알림은 `quality.json`의 `llm`에 기록.
 - `scripts/intraday_kr.py` — **한국장 인트라데이**(개장/장중/마감) 점검. PHASE=auto(기본)|open|mid|close. **auto는 실행 시점 KST로 phase 판정**(`WINDOWS` 구간) — GitHub cron이 수 시간 지연돼도 라벨·데이터가 어긋나지 않음. 구간 밖/이미 캡처/휴장(오늘 봉 없음)이면 스킵하고 `GITHUB_OUTPUT`에 `captured=false`를 내보내 후속 커밋·빌드·배포도 스킵. 삼성·SK하이닉스 지표 + LLM 분석 → `site/src/data/intraday.json`(당일 타임라인 누적, 날짜 바뀌면 리셋). close는 풀 심층 리포트 + **미국 반도체 연결 분석**(`PRIMARY`/`US_SEMI`). LLM이 폴백이면 **기존 실제 분석을 보존**(다운그레이드 방지). 시세는 yfinance(한국 ~15~20분 지연), 조회는 `fetch_data._hist()` 공유(재시도 + `auto_adjust=False` 통일).
 - `scripts/ta.py` — 공유 기술적 지표(RSI·MACD·ATR·SMA·BB·추세판정). `compute_metrics(df)`. (`deep_report.py`도 이걸 import — 중복 금지.)

@@ -68,6 +68,7 @@ news_queries:
   - { q: "원달러 환율",                  lang: "ko" }
 
 news_per_query: 5   # 쿼리당 헤드라인 수
+news_max_age_hours: 72   # 이보다 오래된(발행 시각 기준) 기사는 제외 — 주말 이틀을 넘겨도 남는 폭. 검색어에도 when:Nd(72h=3d)를 붙인다.
 
 llm:
   # provider: 사용할 엔진 우선순위. "gemini"면 GEMINI_API_KEY(무료 티어)를 먼저 사용.
