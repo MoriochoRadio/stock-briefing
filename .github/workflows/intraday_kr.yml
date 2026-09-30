@@ -26,15 +26,22 @@ jobs:
       captured: ${{ steps.snap.outputs.captured }}
       phase: ${{ steps.snap.outputs.phase }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: "pip"
 
+      # 버전 고정 대신 재시도 + 컴파일 패키지 휠 전용(소스 빌드 실패 경로 차단). daily.yml과 동일.
       - name: Install Python deps
-        run: pip install -r requirements.txt
+        run: |
+          for i in 1 2 3; do
+            pip install --prefer-binary --only-binary=numpy,pandas,lxml,curl-cffi,pyyaml \
+              --retries 5 --timeout 60 -r requirements.txt && break
+            [ "$i" = 3 ] && exit 1
+            echo "pip 설치 실패 — 20초 후 재시도 $i/3"; sleep 20
+          done
 
       - name: Korea intraday snapshot (auto phase)
         id: snap
@@ -69,11 +76,11 @@ jobs:
       group: pages-deploy
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -89,13 +96,13 @@ jobs:
           npm run build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
 
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
         continue-on-error: true
 
       - name: 배포 재시도 대기
@@ -104,4 +111,4 @@ jobs:
 
       - name: Deploy to GitHub Pages (재시도)
         if: steps.deploy.outcome == 'failure'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -18,6 +18,12 @@ const watchStocks = (latest ? latest.quotes : []).filter(
 const us = (sentiment.us ?? []).filter((q) => Number.isFinite(q.change_pct));
 const kr = (sentiment.kr ?? []).filter((q) => Number.isFinite(q.change_pct));
 const fng = sentiment.fng ?? null;
+// 최신 수집에 실패해 직전 값을 재사용 중인 섹터 바스켓은 원래 기준일을 함께 밝힌다.
+const sx = sentiment as any;
+const staleNote = [["us", "미국"], ["kr", "한국"]]
+  .filter(([k]) => sx[`${k}Stale`] && sx[`${k}AsOf`])
+  .map(([k, name]) => `${name} 섹터는 ${sx[`${k}AsOf`]} 기준`)
+  .join(" · ");
 
 const ToneIcon = (tone) => (tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : Minus);
 
@@ -39,7 +45,7 @@ const show = groups.length > 0 || fng;
   <section class="mood card" data-reveal data-glow aria-label="오늘의 시장 분위기">
     <div class="mood-head">
       <Activity size={16} /> 오늘의 시장 분위기
-      {sentiment.asOf && <span class="asof">{sentiment.asOf} 기준</span>}
+      {sentiment.asOf && <span class="asof">{sentiment.asOf} 기준{staleNote && <> · {staleNote}</>}</span>}
     </div>
 
     {fng && (

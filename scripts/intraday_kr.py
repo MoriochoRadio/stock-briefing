@@ -94,6 +94,11 @@ US_KEYS = ("ticker", "name", "close", "change_pct", "trend", "rsi14", "rsi_state
            "macd_dir", "vs_sma20_pct", "ret_20d", "ret_60d", "range_pos", "asof")
 
 
+def _num(v, spec, suffix=""):
+    """지표가 None(데이터 부족·NaN)이어도 프롬프트 포맷이 TypeError로 죽지 않게 'n/a'로."""
+    return "n/a" if v is None else f"{v:{spec}}{suffix}"
+
+
 def quote(ticker):
     try:
         df = _hist(ticker, period="5d")
@@ -102,7 +107,9 @@ def quote(ticker):
         c = df["Close"]
         if len(c) < 2 or not c.iloc[-2]:  # 데이터 부족/전일 0 가드(IndexError·0나눗셈 방지)
             return None
-        return {"close": ta.f(c.iloc[-1]), "change_pct": ta.f((c.iloc[-1] / c.iloc[-2] - 1) * 100)}
+        q = {"close": ta.f(c.iloc[-1]), "change_pct": ta.f((c.iloc[-1] / c.iloc[-2] - 1) * 100)}
+        # NaN이 섞이면 ta.f가 None을 준다 — 호출부의 숫자 포맷이 TypeError로 죽지 않게 통째로 없음 처리.
+        return q if None not in q.values() else None
     except Exception as e:
         print(f"[warn] quote {ticker}: {e}")
         return None
@@ -206,6 +213,10 @@ def build_us_semi(cfg, kr_stocks):
             m = ta.compute_metrics(df) if df is not None else None
             if not m:
                 continue
+            # 종가·등락률이 없으면(NaN 봉 등) 분석·평균 계산에 쓸 수 없으므로 이 종목만 건너뛴다.
+            if m.get("close") is None or m.get("change_pct") is None:
+                print(f"[warn] US {item['ticker']}: 종가/등락률 없음 — 건너뜀")
+                continue
             m.update(ticker=item["ticker"], name=item["name"])
             stocks.append({k: m.get(k) for k in US_KEYS})
         except Exception as e:
@@ -215,12 +226,12 @@ def build_us_semi(cfg, kr_stocks):
     sox = quote("^SOX")
 
     def line(s):
-        return (f"- {s['name']}: ${s['close']:,.2f} ({s['change_pct']:+.2f}%), {s['trend']}, "
-                f"RSI {s['rsi14']:.0f}({s['rsi_state']}), MACD {s['macd_dir']}, "
-                f"20일선대비 {s['vs_sma20_pct']:+.1f}%, 20일 {s['ret_20d']:+.1f}%")
+        return (f"- {s['name']}: ${_num(s['close'], ',.2f')} ({_num(s['change_pct'], '+.2f', '%')}), {s['trend']}, "
+                f"RSI {_num(s['rsi14'], '.0f')}({s['rsi_state']}), MACD {s['macd_dir']}, "
+                f"20일선대비 {_num(s['vs_sma20_pct'], '+.1f', '%')}, 20일 {_num(s['ret_20d'], '+.1f', '%')}")
     us_lines = "\n".join(line(s) for s in stocks)
     sox_line = f"필라델피아 반도체지수(SOX) {sox['change_pct']:+.2f}%" if sox else "(SOX 없음)"
-    kr_line = ", ".join(f"{s['name']} {s['change_pct']:+.2f}%" for s in kr_stocks) if kr_stocks else "(없음)"
+    kr_line = ", ".join(f"{s['name']} {_num(s.get('change_pct'), '+.2f', '%')}" for s in kr_stocks) if kr_stocks else "(없음)"
 
     prompt = f"""당신은 미국 반도체 섹터를 한국 투자자 관점에서 짚어주는 분석가다. 아래 직전 미국 세션 종가·지표만 근거로, 한국어로 '대략적인' 분석을 2~3문단 작성하라(한국장처럼 종목별 깊은 분석은 불필요, 큰 그림 중심). 데이터에 없는 수치 금지, 투자 권유 금지.
 

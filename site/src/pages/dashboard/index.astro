@@ -50,6 +50,12 @@ const watchCards = watch.map((q) => ({
 
 const ToneIcon = (t) => (t === "up" ? TrendingUp : t === "down" ? TrendingDown : Minus);
 const asOf = sentiment.asOf ?? latest?.date ?? "";
+// 직전 값을 재사용 중인(최신 수집 실패) 섹터 바스켓은 원래 기준일을 함께 밝힌다.
+const sx = sentiment as any;
+const staleNote = [["us", "미국"], ["kr", "한국"]]
+  .filter(([k]) => sx[`${k}Stale`] && sx[`${k}AsOf`])
+  .map(([k, name]) => `${name} 섹터는 ${sx[`${k}AsOf`]} 기준`)
+  .join(" · ");
 const tvAttr = (item) =>
   item.tv ? { "data-tv": item.tv, "data-name": item.name, role: "button", tabindex: "0", title: `${item.name} 실시간 차트` } : {};
 ---
@@ -59,7 +65,7 @@ const tvAttr = (item) =>
     <p class="hero-eyebrow">대시보드</p>
     <h1 class="hero-date">마켓 대시보드</h1>
     <p class="hero-sum">
-      {asOf} 기준 · 시장 전반을 한 화면에.
+      {asOf} 기준{staleNote && <> ({staleNote})</>} · 시장 전반을 한 화면에.
       <a class="dash-back" href={base}><ArrowLeft size={14} /> 브리핑으로</a>
     </p>
   </header>

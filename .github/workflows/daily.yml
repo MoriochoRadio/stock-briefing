@@ -18,18 +18,28 @@ jobs:
   briefing:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      alerts: ${{ steps.health.outputs.alerts }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: github.event_name != 'push'
         with:
           python-version: "3.12"
           cache: "pip"
 
+      # 버전은 고정하지 않는다(yfinance는 Yahoo 변경을 따라가야 하므로 최신 유지). 대신 PyPI 지연·타임아웃에
+      # 재시도하고, 컴파일이 필요한 패키지는 휠만 받게 해 소스 빌드(→ 빌드 실패)로 빠지는 경로를 막는다.
       - name: Install Python deps
         if: github.event_name != 'push'
-        run: pip install -r requirements.txt
+        run: |
+          for i in 1 2 3; do
+            pip install --prefer-binary --only-binary=numpy,pandas,lxml,curl-cffi,pyyaml \
+              --retries 5 --timeout 60 -r requirements.txt && break
+            [ "$i" = 3 ] && exit 1
+            echo "pip 설치 실패 — 20초 후 재시도 $i/3"; sleep 20
+          done
 
       - name: Fetch market data
         if: github.event_name != 'push'
@@ -45,6 +55,12 @@ jobs:
       - name: Generate current weekly and monthly reviews
         if: github.event_name != 'push'
         run: python scripts/generate_reviews.py
+
+      # '사람 조치 필요' 상태만 골라 출력한다(항상 성공). 실제 실패 알림은 마지막 alert job이 배포 뒤에 낸다.
+      - name: Health check (human-action alerts)
+        id: health
+        if: github.event_name != 'push'
+        run: python scripts/health_check.py
 
       - name: Commit briefing, data, event ledger and reviews
         if: github.event_name != 'push'
@@ -71,11 +87,11 @@ jobs:
       group: pages-deploy
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -91,13 +107,13 @@ jobs:
           npm run build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
 
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
         continue-on-error: true
 
       - name: 배포 재시도 대기
@@ -106,4 +122,22 @@ jobs:
 
       - name: Deploy to GitHub Pages (재시도)
         if: steps.deploy.outcome == 'failure'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+
+  # 사람이 조치해야 하는 상태(LLM 키 인증 실패·쓸 수 있는 모델 없음·키 미설정, 시세 그룹 3일 연속 0건)만
+  # 커밋·배포가 끝난 뒤 이 job을 실패시켜 GitHub 실패 메일로 알린다. 일시 오류(429/5xx, 하루짜리 누락)는
+  # health_check가 거르므로 여기까지 오지 않는다. 배포 결과와 무관하게(배포를 막지 않고) 마지막에 실행.
+  alert:
+    needs: [briefing, deploy]
+    if: ${{ !cancelled() && needs.briefing.outputs.alerts != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 사람 조치 필요 알림
+        env:
+          ALERTS: ${{ needs.briefing.outputs.alerts }}
+        run: |
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error title=사람 조치 필요::$line"
+          done <<< "$ALERTS"
+          exit 1

@@ -21,16 +21,32 @@ def load_config():
         return yaml.safe_load(f)
 
 
+def _valid_close_rows(df, ticker=""):
+    """종가가 비었거나(NaN) 0인 봉을 버리고 '마지막 유효 종가'까지만 남긴다.
+    프리/애프터마켓 데이터가 있는 미국 종목은 Yahoo가 종가 없는 최신 봉을 붙여 주는 일이 있어,
+    마지막 봉을 그대로 읽으면 종목 전체가 '비정상'으로 빠지거나(2026-09 미국 관심종목·섹터 ETF
+    연속 누락) 지표 계산이 None이 된다. 기준일은 남은 마지막 봉의 날짜로 정직하게 표시된다."""
+    close = df["Close"]
+    ok = close.notna() & (close != 0)
+    dropped = int((~ok).sum())
+    if dropped:
+        bad = ", ".join(str(ts.date()) for ts in df.index[(~ok).to_numpy()][-3:])
+        print(f"[info] {ticker}: 종가 없는 봉 {dropped}개 제외({bad}) — 마지막 유효 종가 사용")
+    return df[ok]
+
+
 def _hist(ticker, period="5d", tries=3):
     """yfinance 일봉 조회 + 재시도 — 일시적 429/네트워크 오류로 카드·시리즈가 조용히
     빠지는 것을 줄인다. auto_adjust=False로 통일(전 스크립트가 같은 '실제 체결가' 기준).
-    실패 시 None."""
+    종가 없는(NaN) 봉은 제외해 모든 호출부가 마지막 유효 종가를 쓰게 한다. 실패 시 None."""
     for i in range(tries):
         try:
             df = yf.Ticker(ticker).history(period=period, auto_adjust=False)
             if df is not None and len(df):
-                return df
-            print(f"[warn] {ticker}: 빈 응답 ({i + 1}/{tries})")
+                df = _valid_close_rows(df, ticker)
+                if len(df):
+                    return df
+            print(f"[warn] {ticker}: 빈 응답/유효 종가 없음 ({i + 1}/{tries})")
         except Exception as e:
             print(f"[warn] {ticker}: {e} ({i + 1}/{tries})")
         if i < tries - 1:
@@ -148,11 +164,41 @@ def build_quality(cfg, data):
     }
 
 
-def write_quality(cfg, data):
-    """품질 메타데이터를 별도 JSON으로 기록해 페이지가 브리핑 본문과 독립적으로 읽게 한다."""
+def track_zero_streaks(prev, rows, today):
+    """그룹별 '수집 0건' 연속 기록 — 하루짜리 실패는 알림 대상이 아니고, 며칠째 0건이면
+    (Yahoo/yfinance 변경 등) 사람이 봐야 하므로 health_check가 이 값으로 판단한다.
+    rows: {그룹: (라벨, 받은 수, 기대 수)}. 같은 KST 날짜 재실행은 한 번만 센다.
+    반환: 0건인 그룹만 {그룹: {label, expected, days, since, last}}."""
+    out = {}
+    for key, (label, received, expected) in rows.items():
+        if not expected or received:
+            continue
+        p = (prev or {}).get(key) or {}
+        days = p.get("days", 1) if p.get("last") == today else p.get("days", 0) + 1
+        out[key] = {"label": label, "expected": expected, "days": days,
+                    "since": p.get("since") or today, "last": today}
+    return out
+
+
+def write_quality(cfg, data, breadth_received=None):
+    """품질 메타데이터를 별도 JSON으로 기록해 페이지가 브리핑 본문과 독립적으로 읽게 한다.
+    breadth_received: 섹터 ETF 바스켓의 이번 수집 건수(폴백 재사용 전) — 연속 0건 추적용."""
     path = ROOT / "site" / "src" / "data" / "quality.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    prev = {}
+    if path.exists():
+        try:
+            prev = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            prev = {}
     quality = build_quality(cfg, data)
+    rows = {key: (g["label"], g["received"], g["expected"]) for key, g in quality["groups"].items()}
+    for key, label in (("breadth_us", "미국 섹터 ETF"), ("breadth_kr", "한국 섹터 ETF")):
+        if breadth_received and key in breadth_received:
+            rows[key] = (label, breadth_received[key], len(cfg.get(key, [])))
+    quality["zeroStreaks"] = track_zero_streaks(prev.get("zeroStreaks"), rows, data["date_kst"])
+    for s in quality["zeroStreaks"].values():
+        print(f"[warn] {s['label']} 수집 0/{s['expected']} — {s['days']}일 연속({s['since']}~)")
     path.write_text(json.dumps(quality, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     partial = sum(1 for group in quality["groups"].values() if group["status"] == "partial")
     print(f"quality: {len(quality['groups']) - partial}/{len(quality['groups'])} group(s) complete")
@@ -253,7 +299,9 @@ def fetch_fng():
 
 def build_sentiment(cfg, data):
     """상단 '시장 분위기'용 데이터: 섹터 ETF 등락(미/한) + CNN 탐욕지수.
-    네트워크 실패로 일부가 비어도 직전 sentiment.json 값을 유지한다."""
+    네트워크 실패로 일부가 비어도 직전 sentiment.json 값을 유지하되, 재사용한 섹터는
+    usStale/krStale와 원래 기준일(usAsOf/krAsOf)을 남겨 옛 값이 오늘 것처럼 보이지 않게 한다.
+    반환: 이번 실행의 실제 수집 건수(연속 0건 추적용)."""
     path = ROOT / "site" / "src" / "data" / "sentiment.json"
     prev = {}
     if path.exists():
@@ -269,15 +317,25 @@ def build_sentiment(cfg, data):
     kr = slim(fetch_quotes(cfg.get("breadth_kr", [])))
     fng = fetch_fng()
 
+    today = data["date_kst"]
     out = {
-        "asOf": data["date_kst"],
+        "asOf": today,
         "fng": fng or prev.get("fng"),
-        "us": us or prev.get("us", []),
-        "kr": kr or prev.get("kr", []),
     }
+    for key, fresh in (("us", us), ("kr", kr)):
+        if fresh:
+            out[key], out[f"{key}AsOf"], out[f"{key}Stale"] = fresh, today, False
+            continue
+        old = prev.get(key, [])
+        out[key] = old
+        out[f"{key}AsOf"] = (prev.get(f"{key}AsOf") or prev.get("asOf")) if old else None
+        out[f"{key}Stale"] = bool(old)
+        if old:
+            print(f"[warn] sentiment {key}: 이번 수집 0건 — {out[f'{key}AsOf']} 기준 값 재사용(stale)")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding="utf-8")
-    print(f"sentiment: us={len(out['us'])} kr={len(out['kr'])} fng={'ok' if out['fng'] else 'none'}")
+    print(f"sentiment: us={len(us)}/{len(out['us'])} kr={len(kr)}/{len(out['kr'])} fng={'ok' if out['fng'] else 'none'}")
+    return {"breadth_us": len(us), "breadth_kr": len(kr)}
 
 
 def _news_category(query):
@@ -407,10 +465,10 @@ def main():
     if data["indices"] or data["watchlist_us"] or data["watchlist_kr"]:
         update_history(data)
     build_series(cfg)
-    build_sentiment(cfg, data)
+    breadth = build_sentiment(cfg, data)
     build_news(data)
     build_event_ledger(data)
-    write_quality(cfg, data)
+    write_quality(cfg, data, breadth)
     print(f"saved {out} — quotes:{len(data['indices'])+len(data['watchlist_us'])+len(data['watchlist_kr'])}, news:{len(data['news'])}")
 
 

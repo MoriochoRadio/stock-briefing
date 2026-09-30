@@ -2,6 +2,7 @@
 import sentiment from "../data/sentiment.json";
 import history from "../data/history.json";
 import intraday from "../data/intraday.json";
+import quality from "../data/quality.json";
 
 // 시점 반응형 "지평선 히어로": 한국장 흐름을 하루 동안 따라간다.
 //  - 시점(개장 전/오전장/오후장/장 마감/마감 후)에 따라 하늘·해 색과 라벨이 바뀜
@@ -47,9 +48,27 @@ const phase = phaseOf(nowKst.getUTCDay(), nowKst.getUTCHours());
 const snaps: any[] = (intraday as any)?.snapshots ?? [];
 const latestSnap = snaps.length ? snaps[snaps.length - 1] : null;
 
-// 분석 엔진 라벨 — 최신 스냅샷의 engine에서 유도(provider 바뀌면 자동 반영). 없으면 기본값.
-const engineRaw = [...snaps.map((s) => s.engine), (intraday as any)?.us_semi?.engine].filter((e) => e && e !== "없음").pop();
-const ENGINE = /claude/i.test(engineRaw || "") ? "Claude Opus 4.8" : "Gemini 2.5 Flash";
+// 분석 엔진 라벨 — 가장 최근 실행(모닝 브리핑 quality.llm vs 한국장 최신 스냅샷)이 실제로 쓴 모델.
+// 모델이 자동 전환돼도 코드 수정 없이 반영되고, AI를 못 썼으면(폴백 '없음') 그대로 'AI 미사용'으로 보인다.
+const llm = (quality as any)?.llm ?? null;
+const runs = [
+  llm?.engine ? { at: Date.parse(llm.generatedAt ?? (quality as any).generatedAt), engine: llm.engine } : null,
+  latestSnap?.engine && (intraday as any)?.date
+    ? { at: Date.parse(`${(intraday as any).date}T${latestSnap.time}:00+09:00`), engine: latestSnap.engine }
+    : null,
+].filter((r): r is { at: number; engine: string } => Boolean(r) && Number.isFinite(r!.at));
+const engineRaw = runs.sort((a, b) => a.at - b.at).pop()?.engine;
+function engineLabel(raw?: string) {
+  if (!raw || raw === "없음") return null;
+  const id = (raw.match(/\(([^)]+)\)/)?.[1] ?? raw).trim();
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+  const claude = id.match(/^claude-([a-z]+)-(\d+)-(\d+)/i);
+  if (claude) return `Claude ${cap(claude[1])} ${claude[2]}.${claude[3]}`;
+  if (/^gemini-/i.test(id)) return id.split("-").map((w) => (/^\d/.test(w) ? w : cap(w))).join(" ").replace(/ Lite\b/, "-Lite");
+  return raw;
+}
+const ENGINE = engineLabel(engineRaw);
+const engineText = ENGINE ? `AI 분석 · ${ENGINE}` : engineRaw === "없음" ? "AI 미사용 · 데이터 요약" : null;
 const idMarket = (intraday as any)?.market ?? null;
 const krStocks: any[] = latestSnap?.stocks ?? [];
 const fmtPct = (p: number) => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(2) + "%";
@@ -116,7 +135,7 @@ const idx = wantIdx
     <p class="hero-eyebrow">
       <span class="phase-chip" data-phase-label>{PHASE_META[phase].label}</span>
       <span class="phase-when" data-phase-when>{PHASE_META[phase].sunLabel}</span>
-      <span class="hero-engine">AI 분석 · {ENGINE}</span>
+      {engineText && <span class="hero-engine">{engineText}</span>}
     </p>
     <h1 class="hero-date"><span data-date-text>{dateText}</span> <span class="hero-wd" data-date-wd>{weekday && `${weekday}요일`}</span></h1>
 

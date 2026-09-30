@@ -12,6 +12,7 @@ GitHub Actions가 하루 4회(🌅07:00 밤사이 미국장 + 한국장 🟢09:1
 - `scripts/intraday_kr.py` — 한국장 개장/장중/마감 + 미국 반도체 분석 → `intraday.json` (폴백 시 기존 실제 분석 보존)
 - `scripts/ta.py` — 공유 기술적 지표 (`deep_report.py`도 import)
 - `site/` — Astro 5. `Hero`(시점 반응형) · `IntradayTimeline` · `StockCharts` · `UsSemiReport`
+- `scripts/health_check.py` — '사람 조치 필요' 상태(LLM 키/모델, 시세 연속 0건)만 골라 daily.yml 마지막 `alert` job으로 실패 메일
 - `.github/workflows/` — `daily.yml`(모닝) · `intraday_kr.yml`(한국장 3회)
 
 ## 반드시 지킬 규칙
