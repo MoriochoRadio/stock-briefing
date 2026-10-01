@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-09-30T13:33:39.467196+09:00",
-  "dateKst": "2026-09-30",
+  "generatedAt": "2026-10-01T10:16:00.460906+09:00",
+  "dateKst": "2026-10-01",
   "source": "Yahoo Finance via yfinance",
   "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
   "newsSource": "Google News RSS",
   "newsQueries": 8,
-  "newsCollected": 40,
+  "newsCollected": 35,
   "groups": {
     "indices": {
       "label": "지수·환율",
@@ -14,7 +14,8 @@
       "coveragePct": 100.0,
       "asOfDates": [
         "2026-09-29",
-        "2026-09-30"
+        "2026-09-30",
+        "2026-10-01"
       ],
       "status": "complete"
     },
@@ -43,7 +44,7 @@
   "llm": {
     "engine": "Gemini (gemini-2.5-flash)",
     "model": "gemini-2.5-flash",
-    "generatedAt": "2026-09-30T13:34:26.075745+09:00",
+    "generatedAt": "2026-10-01T10:16:39.752841+09:00",
     "alerts": []
   }
 }
