@@ -340,6 +340,15 @@ def list_gemini_models(key):
     return names
 
 
+def _thinking_config(model, llm):
+    """Gemini 3 이상은 추론을 단계(thinkingLevel)로, 2.x 는 토큰 예산(thinkingBudget)으로 받는다.
+    거부되면 _gemini_generate 호출부가 같은 모델로 thinking 없이 다시 시도한다."""
+    m = re.match(r"gemini-(\d+)", model)
+    if m and int(m.group(1)) >= 3 and llm.get("gemini_thinking_level"):
+        return {"thinkingLevel": llm["gemini_thinking_level"]}
+    return {"thinkingBudget": llm.get("gemini_thinking_budget", 0)}
+
+
 def _gemini_generate(model, prompt, cfg, key, thinking=True):
     # 키는 URL 쿼리 대신 헤더로 전달 — 예외 메시지·프록시 로그에 URL이 찍혀도 키가 새지 않는다
     url = f"{GEMINI_API}/models/{model}:generateContent"
@@ -347,7 +356,7 @@ def _gemini_generate(model, prompt, cfg, key, thinking=True):
     # 소비하므로 max_output_tokens보다 작게 둔다. 0=끔, -1=동적.
     gen = {"maxOutputTokens": cfg["llm"]["max_output_tokens"]}
     if thinking:
-        gen["thinkingConfig"] = {"thinkingBudget": cfg["llm"].get("gemini_thinking_budget", 0)}
+        gen["thinkingConfig"] = _thinking_config(model, cfg["llm"])
     body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": gen}
     req = urllib.request.Request(
         url, data=json.dumps(body).encode(),

@@ -12,7 +12,7 @@ Tracks the US and Korean stock markets **all day long**, automatically generatin
 
 🔗 **Live**: https://moriochoradio.github.io/stock-briefing/
 
-**Tech stack**: Python (yfinance, Google News RSS, pandas/numpy) · Gemini API (2.5 Flash, thinking) / Claude Opus 4.8 (optional) · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
+**Tech stack**: Python (yfinance, Google News RSS, pandas/numpy) · Gemini API (3.8 Flash, thinking) / Claude Opus 4.8 (optional) · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
 
 ## Daily Cycle (KST — Korea Standard Time, weekdays)
 
@@ -79,7 +79,7 @@ A. The data changes only 3–4 times a day (morning, open, mid, close), so there
 A. Instead of trusting the clock, crons are scheduled densely at 30-minute intervals, and each run determines its own phase (open/mid/close) from the **actual KST time it arrives**. Runs outside a window, duplicates, and market holidays are skipped immediately without calling the LLM, so labels and data stay consistent even under delay.
 
 **Q. Why is the default LLM the Gemini free tier?**
-A. "Nearly zero-cost operation" is the project's premise, so Gemini 2.5 Flash — which supports thinking (a reasoning budget) even on the free tier — is the default. For deeper analysis, engine calls are abstracted behind `run_llm()` so a one-line change in `config.yaml` switches to Claude Opus.
+A. "Nearly zero-cost operation" is the project's premise, so Gemini Flash — which supports thinking even on the free tier — is the default (originally 2.5 Flash; switched to 3.8 Flash on 2026-11-16 ahead of 2.5 Flash shutting down on 2026-12-01). For deeper analysis, engine calls are abstracted behind `run_llm()` so a one-line change in `config.yaml` switches to Claude Opus.
 
 **Q. Doesn't the site break when the LLM API fails?**
 A. `run_llm()` has built-in retries (up to 6) and engine fallback; if it still fails, a data summary is used instead. On fallback, the intraday script **preserves the existing real analysis**, preventing a downgrade where a good result gets overwritten by a bad one.
@@ -104,7 +104,7 @@ A. For a content-centric static site, Astro's default output is pure HTML with n
 3. **Get a Gemini API key (free, no card required)** — https://aistudio.google.com/apikey  ⚠️ Registering billing removes the free tier.
    > For deeper analysis, get an **Anthropic key** instead (https://console.anthropic.com/, paid, about $3–4/month — separate from a Claude MAX subscription) and set `llm.provider` in `config.yaml` to `"anthropic"`.
 4. **Register secrets** — Settings → Secrets and variables → Actions → New repository secret
-   - `GEMINI_API_KEY` (default engine: Gemini 2.5 Flash)
+   - `GEMINI_API_KEY` (default engine: Gemini 3.8 Flash)
    - (Optional) `ANTHROPIC_API_KEY` + `provider: anthropic` in `config.yaml` → Claude Opus 4.8
    - ⚠️ Pushing changes to workflow files (`.github/workflows/`) requires a token with the **`workflow` scope** (`gh auth refresh -s workflow`).
 5. **Enable Pages** — Settings → Pages → Source: **GitHub Actions**.

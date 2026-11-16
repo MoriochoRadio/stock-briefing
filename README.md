@@ -12,7 +12,7 @@
 
 🔗 **라이브**: https://moriochoradio.github.io/stock-briefing/
 
-**기술 스택**: Python(yfinance, Google News RSS, pandas/numpy) · Gemini API(2.5 Flash, thinking) / Claude Opus 4.8(옵션) · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
+**기술 스택**: Python(yfinance, Google News RSS, pandas/numpy) · Gemini API(3.8 Flash, thinking) / Claude Opus 4.8(옵션) · Astro 5 · Tailwind CSS 4 · TradingView lightweight-charts · Lucide
 
 ## 하루 사이클 (KST, 평일)
 
@@ -79,7 +79,7 @@ A. 데이터가 하루 3~4번(모닝·개장·장중·마감)만 바뀌므로 �
 A. 시각을 믿는 대신 30분 간격으로 cron을 촘촘히 걸고, 각 실행이 **실제 도착한 KST 시각**으로 phase(개장/장중/마감)를 스스로 판정하게 했습니다. 구간 밖·중복·휴장이면 LLM 호출 없이 즉시 스킵해 지연이 와도 라벨과 데이터가 어긋나지 않습니다.
 
 **Q. 왜 기본 LLM이 Gemini 무료 티어인가?**
-A. "거의 0원 운영"이 프로젝트 전제라 무료 티어에 thinking(추론 예산)까지 지원하는 Gemini 2.5 Flash를 기본으로 삼았습니다. 더 깊은 분석이 필요하면 `config.yaml` 한 줄로 Claude Opus로 전환되도록 엔진 호출을 `run_llm()`으로 추상화했습니다.
+A. "거의 0원 운영"이 프로젝트 전제라 무료 티어에 thinking(추론)까지 지원하는 Gemini Flash를 기본으로 삼았습니다(처음엔 2.5 Flash, 2026-12-01 종료를 앞두고 11-16에 3.8 Flash로 교체). 더 깊은 분석이 필요하면 `config.yaml` 한 줄로 Claude Opus로 전환되도록 엔진 호출을 `run_llm()`으로 추상화했습니다.
 
 **Q. LLM API가 실패하면 사이트가 깨지지 않나?**
 A. `run_llm()`에 재시도(최대 6회)와 엔진 폴백을 내장했고, 그래도 실패하면 데이터 요약으로 대체합니다. 인트라데이는 폴백 시 **기존 실제 분석을 보존**해 좋은 결과가 나쁜 결과로 덮이는 다운그레이드를 막았습니다.
@@ -104,7 +104,7 @@ A. 콘텐츠 중심 정적 사이트에 맞게 기본 출력이 JS 없는 순수
 3. **Gemini API 키 발급 (무료, 카드 불필요)** — https://aistudio.google.com/apikey  ⚠️ 결제 등록 시 무료 티어가 사라짐.
    > 더 깊은 분석을 원하면 대신 **Anthropic 키**(https://console.anthropic.com/, 유료·월 ~$3~4 · Claude MAX 구독과 별도)를 발급하고 `config.yaml`의 `llm.provider`를 `"anthropic"`으로.
 4. **시크릿 등록** — Settings → Secrets and variables → Actions → New repository secret
-   - `GEMINI_API_KEY` (기본 엔진: Gemini 2.5 Flash)
+   - `GEMINI_API_KEY` (기본 엔진: Gemini 3.8 Flash)
    - (선택) `ANTHROPIC_API_KEY` + `config.yaml`의 `provider: anthropic` → Claude Opus 4.8
    - ⚠️ 워크플로 파일(`.github/workflows/`)을 수정·push하려면 토큰에 **`workflow` 스코프**가 필요합니다(`gh auth refresh -s workflow`).
 5. **Pages 켜기** — Settings → Pages → Source: **GitHub Actions**.
