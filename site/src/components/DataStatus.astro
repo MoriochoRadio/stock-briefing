@@ -39,26 +39,32 @@ const quoteDates = [...new Set([
   ...(kr?.asOfDates ?? []),
   ...(intradayQuality?.primaryAsOfDates ?? []),
 ])].filter(Boolean);
+// Yahoo가 최신 세션 봉을 비우거나 빼고 준 종목 — 직전 봉 값을 그 실제 기준일로 보여 주고 있음을 밝힌다.
+const lagging = Object.values(groups).flatMap((group: any) => group?.lagging ?? []);
+const lagNote = lagging.length
+  ? `${lagging.slice(0, 3).map((item: any) => item.name || item.ticker).join("·")}${lagging.length > 3 ? ` 외 ${lagging.length - 3}개` : ""}는 최신 세션(${[...new Set(lagging.map((item: any) => item.expected))].join("·")}) 시세 미수신 — ${[...new Set(lagging.map((item: any) => item.asOf))].join("·")} 기준 값`
+  : "";
 const hasDailyQuality = Object.keys(groups).length > 0 || Boolean(latestHistory);
 const hasPartial = !hasDailyQuality || [us, kr].some((group) => group?.status === "partial") || Boolean(intradayQuality && intradayQuality.primaryReceived < intradayQuality.primaryExpected);
 const isDelayed = Boolean(intradayQuality?.delayed);
-const state = isDelayed ? "지연 시세" : hasPartial ? "일부 수집" : "수집 완료";
-const StateIcon = isDelayed || hasPartial ? ShieldAlert : BadgeCheck;
+const state = isDelayed ? "지연 시세" : hasPartial ? "일부 수집" : lagging.length ? "일부 기준일 지연" : "수집 완료";
+const StateIcon = isDelayed || hasPartial || lagging.length ? ShieldAlert : BadgeCheck;
 const pct = (value) => Number.isFinite(value) ? `${Number(value).toFixed(value % 1 ? 1 : 0)}%` : "–";
 ---
 
-<section class:list={["data-status", "card", { caution: isDelayed || hasPartial }]} aria-label="데이터 상태" data-reveal>
+<section class:list={["data-status", "card", { caution: isDelayed || hasPartial || lagging.length > 0 }]} aria-label="데이터 상태" data-reveal>
   <div class="status-head">
     <div>
       <p class="cap"><Database size={14} /> DATA STATUS</p>
       <h2>자료 기준과 수집 상태</h2>
     </div>
-    <span class:list={["state", { caution: isDelayed || hasPartial }]}><StateIcon size={14} /> {state}</span>
+    <span class:list={["state", { caution: isDelayed || hasPartial || lagging.length > 0 }]}><StateIcon size={14} /> {state}</span>
   </div>
 
   <p class="status-desc">
     <Clock3 size={14} /> 마지막 반영 <b>{asOf}</b>{quoteDates.length > 0 && <> · 시세 기준일 {quoteDates.join(" · ")}</>}
   </p>
+  {lagNote && <p class="status-desc lag-note"><ShieldAlert size={14} /> {lagNote}</p>}
 
   <div class="status-grid">
     <div class="metric">
@@ -100,6 +106,8 @@ const pct = (value) => Number.isFinite(value) ? `${Number(value).toFixed(value %
   :global(html[data-theme="dark"]) .state.caution { color: #f5bd5b; }
   .status-desc { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 12px 0 15px; color: var(--sub); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
   .status-desc b { color: var(--text); font-weight: 700; }
+  .lag-note { margin-top: -8px; color: #d8891c; }
+  :global(html[data-theme="dark"]) .lag-note { color: #f5bd5b; }
   .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
   .metric { min-width: 0; padding: 13px 14px; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--bg-soft) 45%, transparent); }
   .metric:last-child { border-right: 0; }

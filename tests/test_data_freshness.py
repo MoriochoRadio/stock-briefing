@@ -134,7 +134,7 @@ class KoreanCloseTests(unittest.TestCase):
 
     def _with_hist(self, frames, fn):
         original = fetch_data._hist
-        fetch_data._hist = lambda ticker, period="5d": frames.get(ticker)
+        fetch_data._hist = lambda ticker, period="5d", **kw: frames.get(ticker)
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 return fn()

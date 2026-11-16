@@ -14,7 +14,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ta  # noqa: E402
-from fetch_data import _hist  # noqa: E402
+from fetch_data import _hist, prev_close_base  # noqa: E402
 from generate import run_llm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -99,6 +99,19 @@ def _num(v, spec, suffix=""):
     return "n/a" if v is None else f"{v:{spec}}{suffix}"
 
 
+def verify_change_base(df, ticker, m):
+    """compute_metrics의 등락률은 c[-2] 대비다. 어제 봉이 빠진 응답이면 c[-2]가 이틀 전 종가라
+    등락률이 틀린다(2026-10-13 코스피) — prev_close_base로 검증해 Yahoo 직전 종가로 다시 계산한다."""
+    if not m or df is None or len(df) < 2:
+        return m
+    base, src = prev_close_base(df, ticker)
+    if src == "meta" and base and m.get("close") is not None:
+        m["prev"] = ta.f(base)
+        m["change_pct"] = ta.f((m["close"] / base - 1) * 100)
+    m["change_base"] = src
+    return m
+
+
 def quote(ticker):
     try:
         df = _hist(ticker, period="5d")
@@ -107,7 +120,10 @@ def quote(ticker):
         c = df["Close"]
         if len(c) < 2 or not c.iloc[-2]:  # 데이터 부족/전일 0 가드(IndexError·0나눗셈 방지)
             return None
-        q = {"close": ta.f(c.iloc[-1]), "change_pct": ta.f((c.iloc[-1] / c.iloc[-2] - 1) * 100)}
+        base, _src = prev_close_base(df, ticker)  # 어제 봉 누락 시 이틀 전 대비로 계산되지 않게
+        if not base:
+            return None
+        q = {"close": ta.f(c.iloc[-1]), "change_pct": ta.f((c.iloc[-1] / base - 1) * 100)}
         # NaN이 섞이면 ta.f가 None을 준다 — 호출부의 숫자 포맷이 TypeError로 죽지 않게 통째로 없음 처리.
         return q if None not in q.values() else None
     except Exception as e:
@@ -217,7 +233,7 @@ def build_us_semi(cfg, kr_stocks):
     for item in US_SEMI:
         try:
             df = _hist(item["ticker"], period="1y")
-            m = ta.compute_metrics(df) if df is not None else None
+            m = verify_change_base(df, item["ticker"], ta.compute_metrics(df) if df is not None else None)
             if not m:
                 continue
             # 종가·등락률이 없으면(NaN 봉 등) 분석·평균 계산에 쓸 수 없으므로 이 종목만 건너뛴다.
@@ -232,8 +248,12 @@ def build_us_semi(cfg, kr_stocks):
         return None
     sox = quote("^SOX")
 
+    latest_us = max(str(s.get("asof") or "") for s in stocks)
+
     def line(s):
-        return (f"- {s['name']}: ${_num(s['close'], ',.2f')} ({_num(s['change_pct'], '+.2f', '%')}), {s['trend']}, "
+        # 최신 미국 세션 봉을 못 받은 종목은 실제 기준일을 밝힌다(직전 세션 값을 최신처럼 쓰지 않게).
+        when = "" if str(s.get("asof") or "") == latest_us else f" [기준일 {s.get('asof')} — {latest_us} 세션 미수신]"
+        return (f"- {s['name']}{when}: ${_num(s['close'], ',.2f')} ({_num(s['change_pct'], '+.2f', '%')}), {s['trend']}, "
                 f"RSI {_num(s['rsi14'], '.0f')}({s['rsi_state']}), MACD {s['macd_dir']}, "
                 f"20일선대비 {_num(s['vs_sma20_pct'], '+.1f', '%')}, 20일 {_num(s['ret_20d'], '+.1f', '%')}")
     us_lines = "\n".join(line(s) for s in stocks)
@@ -260,7 +280,7 @@ def build_us_semi(cfg, kr_stocks):
                 + "; ".join(f"{s['name']} {s['change_pct']:+.2f}%({s['trend']})" for s in stocks)
                 + ". (LLM 미설정 — 데이터 요약만 표시)")
         engine = "없음"
-    return {"asof": stocks[0].get("asof"), "sox": sox, "stocks": stocks,
+    return {"asof": latest_us or stocks[0].get("asof"), "sox": sox, "stocks": stocks,
             "read": body.strip(), "engine": engine}
 
 
@@ -293,7 +313,7 @@ def main():
     for item in PRIMARY:
         try:
             df = _hist(item["ticker"], period="1y")
-            m = ta.compute_metrics(df) if df is not None else None
+            m = verify_change_base(df, item["ticker"], ta.compute_metrics(df) if df is not None else None)
             if not m:
                 continue
             m.update(ticker=item["ticker"], name=item["name"])

@@ -23,6 +23,12 @@ const sx = sentiment as any;
 const staleNote = [["us", "미국"], ["kr", "한국"]]
   .filter(([k]) => sx[`${k}Stale`] && sx[`${k}AsOf`])
   .map(([k, name]) => `${name} 섹터는 ${sx[`${k}AsOf`]} 기준`)
+  .concat(
+    // 이번에 받았지만 일부 ETF가 최신 세션 봉 없이 직전 봉으로 온 경우 — 그 실제 기준일을 밝힌다.
+    [["us", "미국"], ["kr", "한국"]]
+      .filter(([k]) => !sx[`${k}Stale`] && (sx[`${k}LagDates`] ?? []).length)
+      .map(([k, name]) => `${name} 일부 섹터는 ${sx[`${k}LagDates`].join("·")} 기준(최신 세션 미수신)`),
+  )
   .join(" · ");
 
 const ToneIcon = (tone) => (tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : Minus);

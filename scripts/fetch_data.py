@@ -36,7 +36,7 @@ def _valid_close_rows(df, ticker=""):
     return df[ok]
 
 
-def _hist(ticker, period="5d", tries=3):
+def _fetch_daily(ticker, period="5d", tries=3):
     """yfinance 일봉 조회 + 재시도 — 일시적 429/네트워크 오류로 카드·시리즈가 조용히
     빠지는 것을 줄인다. auto_adjust=False로 통일(전 스크립트가 같은 '실제 체결가' 기준).
     종가 없는(NaN) 봉은 제외해 모든 호출부가 마지막 유효 종가를 쓰게 한다. 실패 시 None."""
@@ -82,16 +82,167 @@ def _completed_bars(df, ticker, now=None):
     return df.iloc[:-1]
 
 
+# ── 최신 세션 봉 누락 대비 ──────────────────────────────────────────────────────────────
+# Yahoo는 가끔 '이미 끝난 최신 세션' 봉을 종가 NaN으로 주거나(2026-10-14~28·11-04~05 미국 개별주·
+# 섹터 ETF) 아예 빼고 준다(10-13 한국 개별주, 10-14~ 코스피 지수). 그러면 직전 봉이 마지막 봉이 돼
+# 기준일이 하루 밀린 시세가 '밤사이 움직임'처럼 브리핑에 들어가고, 인트라데이 등락률은 엉뚱한
+# 전일(이틀 전) 대비로 계산됐다. → 기대 세션 봉이 없으면 짧게 재시도(+더 넓은 기간)하고, 그래도 없으면
+# 직전 봉을 쓰되 '진짜 기준일'을 남긴다(annotate_lag가 종목별로 표시).
+# 세션 확정 시각(현지): 정규장 마감 + Yahoo 반영 여유. 이 시각 이후면 그날 봉이 있어야 정상.
+MARKET_SESSIONS = {
+    "KR": ("Asia/Seoul", KR_CLOSE_FINAL),
+    "US": ("America/New_York", (17, 0)),
+}
+US_INDEX_TICKERS = {"^DJI", "^GSPC", "^IXIC", "^SOX", "^NDX", "^RUT"}
+GAP_BACKOFF = (2, 4)          # 누락 시 재시도 간격(초) — 시도 수 = len(GAP_BACKOFF)
+WIDER_PERIOD = {"5d": "1mo", "1mo": "3mo", "3mo": "6mo", "6mo": "1y", "1y": "2y"}
+# 한 실행 안에서 (시장, 기대 세션)이 재시도로도 안 풀리면 같은 시장의 다른 티커는 재시도를 건너뛴다
+# (휴장일 — 평일 달력만 쓰므로 공휴일엔 '누락'으로 보인다 — 에 티커마다 수 초씩 기다리지 않게).
+_GAP_UNRESOLVED = set()
+
+
+def _market_of(ticker):
+    """세션 달력을 적용할 시장. 환율(=X)·기타 해외 거래소 등은 None(누락 판정 안 함)."""
+    t = (ticker or "").upper()
+    if _is_kr_market(t):
+        return "KR"
+    if t in US_INDEX_TICKERS:
+        return "US"
+    if t.startswith("^") or "=" in t or "." in t:
+        return None
+    return "US" if t else None
+
+
+def _bar_day(ts):
+    return ts.date()  # 인덱스는 거래소 현지 tz 자정 — 현지 날짜 그대로가 세션 날짜
+
+
+def _expected_session(ticker, now=None):
+    """지금(now) 기준으로 '이미 끝나 Yahoo에 봉이 있어야 하는' 최신 세션 날짜(평일 달력).
+    공휴일은 모르므로, 휴장일은 annotate_lag의 시장 내 합의(아무도 그 날짜가 없으면 휴장)로 거른다."""
+    market = _market_of(ticker)
+    if not market:
+        return None
+    tz, final = MARKET_SESSIONS[market]
+    local = (now or datetime.now(KST)).astimezone(ZoneInfo(tz))
+    day = local.date()
+    if (local.hour, local.minute) < final:
+        day -= timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def _missing_session(df, ticker, now=None):
+    """기대 세션 봉이 (유효 종가로) 없으면 그 날짜, 있으면 None.
+    마지막 봉 날짜만 보지 않는다 — 장중 오늘 봉은 있는데 어제 봉만 빠진 경우(10-14 코스피)도 잡는다."""
+    expected = _expected_session(ticker, now)
+    if expected is None or df is None or not len(df):
+        return None
+    days = {_bar_day(ts) for ts in df.index}
+    return None if expected in days else expected
+
+
+def _hist(ticker, period="5d", tries=3, now=None):
+    """일봉 조회(_fetch_daily) + 최신 세션 봉 누락 대비 재시도.
+    기대 세션 봉이 없거나 종가 NaN이면 GAP_BACKOFF 간격으로 재시도한다(마지막 시도는 더 넓은 기간 —
+    Yahoo가 같은 요청엔 같은 캐시를 주는 일이 있어 요청 모양을 바꾼다). 그래도 없으면 받은 봉 그대로
+    (직전 봉이 마지막 — 기준일은 그 봉의 실제 날짜) 돌려주고 df.attrs["missing_session"]에 날짜를 남긴다."""
+    df = _fetch_daily(ticker, period, tries)
+    missing = _missing_session(df, ticker, now)
+    if not missing:
+        return df
+    market = _market_of(ticker)
+    last = max(_bar_day(ts) for ts in df.index)
+    if (market, missing) in _GAP_UNRESOLVED:
+        print(f"[gap] {ticker}: {missing} 세션 봉 없음(같은 시장 재시도도 실패 — 휴장 또는 Yahoo 누락) — 재시도 생략")
+    else:
+        print(f"[gap] {ticker}: {missing} 세션 봉이 없음/종가 NaN(마지막 유효 봉 {last}) — 재시도")
+        for i, wait in enumerate(GAP_BACKOFF):
+            time.sleep(wait)
+            wider = i == len(GAP_BACKOFF) - 1 and period in WIDER_PERIOD
+            alt = _fetch_daily(ticker, WIDER_PERIOD[period] if wider else period, tries=1)
+            if alt is not None and wider:
+                alt = alt[alt.index >= df.index[0]]  # 호출부가 기대한 기간으로 되돌림
+            if alt is not None and len(alt) and not _missing_session(alt, ticker, now):
+                print(f"[gap-fixed] {ticker}: 재시도 {i + 1}/{len(GAP_BACKOFF)}{'(넓은 기간)' if wider else ''}로 {missing} 봉 확보")
+                return alt
+        _GAP_UNRESOLVED.add((market, missing))
+        print(f"[gap] {ticker}: 재시도 후에도 {missing} 봉 없음 — 직전 봉({last})을 쓰고 기준일은 {last}로 표기")
+    df = df.copy()
+    df.attrs["missing_session"] = str(missing)
+    return df
+
+
+def prev_close_base(df, ticker):
+    """등락률 기준(전일 종가) 검증. 마지막 봉 바로 앞 봉이 '직전 평일'이 아니면(어제 봉 누락 등)
+    c[-2]는 이틀 전 종가라 등락률이 틀린다(10-13 인트라데이). 그때는 Yahoo가 같은 세션 기준으로 주는
+    직전 종가(range=1d 응답의 chartPreviousClose)를 쓴다.
+    반환 (전일 종가, 출처 'bar'|'meta'|'unverified'). 휴장 다음 날도 'meta'로 가지만 값은 같다."""
+    c = df["Close"]
+    if len(c) < 2:
+        return None, "unverified"
+    last_day, prev_day = _bar_day(c.index[-1]), _bar_day(c.index[-2])
+    expected_prev = last_day - timedelta(days=1)
+    while expected_prev.weekday() >= 5:
+        expected_prev -= timedelta(days=1)
+    if prev_day == expected_prev:
+        return float(c.iloc[-2]), "bar"
+    try:
+        tk = yf.Ticker(ticker)
+        one = tk.history(period="1d", auto_adjust=False)
+        meta = tk.history_metadata or {}
+        base = meta.get("chartPreviousClose")
+        if one is not None and len(one) and _bar_day(one.index[-1]) == last_day and base and math.isfinite(float(base)):
+            print(f"[gap] {ticker}: 직전 봉이 {prev_day}(직전 평일 {expected_prev} 아님) — Yahoo 직전 종가 {base}를 등락 기준으로 사용")
+            return float(base), "meta"
+    except Exception as e:
+        print(f"[warn] {ticker}: 직전 종가 확인 실패({e})")
+    print(f"[warn] {ticker}: 직전 평일 {expected_prev} 봉 없음 — {prev_day} 종가 대비 등락(기준일 표기)")
+    return float(c.iloc[-2]), "unverified"
+
+
+def annotate_lag(quotes, now=None):
+    """종목별 기준일이 '그 시장의 최신 세션'보다 늦은 시세에 lagging/expected_date를 붙인다(제자리 수정).
+    시장 기준 세션 = min(평일 달력상 기대 세션, 같은 시장 시세 중 가장 최신 날짜) — 그 시장의 누구도
+    기대 세션 날짜가 없으면 휴장(또는 전면 누락)으로 보고 아무도 '밀림'으로 표시하지 않는다.
+    반환: lagging 표시된 시세 목록. 사람 조치 대상이 아님(하루짜리 Yahoo 누락) — 알림 없음."""
+    ref = {}
+    for q in quotes:
+        market, d = _market_of(q.get("ticker")), q.get("date")
+        if market and d:
+            ref[market] = max(ref.get(market, ""), d)
+    lagging = []
+    for q in quotes:
+        q.pop("lagging", None)
+        q.pop("expected_date", None)
+        market = _market_of(q.get("ticker"))
+        expected = _expected_session(q.get("ticker"), now)
+        if not market or expected is None or not q.get("date"):
+            continue
+        target = min(str(expected), ref[market])
+        if q["date"] < target:
+            q["lagging"], q["expected_date"] = True, target
+            lagging.append(q)
+    if lagging:
+        names = ", ".join(f"{q.get('name') or q['ticker']}({q['date']})" for q in lagging)
+        print(f"[gap] 최신 세션 시세 미수신 {len(lagging)}건 — 직전 봉 기준일로 표기: {names}")
+    return lagging
+
+
 def fetch_quotes(items, now=None):
     """최근 종가와 등락률. 실패하거나 값이 비정상(NaN)인 티커는 건너뜀.
     한국 시장 티커는 장 마감 확정 전이면 오늘 장중 봉 대신 직전 완결 봉(전일 종가) 기준."""
     out = []
     for item in items:
         try:
-            hist = _completed_bars(_hist(item["ticker"]), item["ticker"], now)
+            hist = _completed_bars(_hist(item["ticker"], now=now), item["ticker"], now)
             if hist is None or len(hist) < 2:
                 continue
-            last, prev = float(hist["Close"].iloc[-1]), float(hist["Close"].iloc[-2])
+            last = float(hist["Close"].iloc[-1])
+            # 직전 봉이 빠진 응답이면 c[-2]는 이틀 전 종가 — 검증된 전일 종가로 등락률을 계산한다.
+            prev, _src = prev_close_base(hist, item["ticker"])
+            prev = float("nan") if prev is None else prev
             # 휴장/빈 응답 시 yfinance가 마지막 종가를 NaN으로 주는 경우가 있다.
             # NaN을 그대로 두면 history.json이 비표준 JSON이 되어 Astro 빌드가 깨지므로 건너뛴다.
             if not (math.isfinite(last) and math.isfinite(prev)) or prev == 0:
@@ -208,6 +359,11 @@ def build_quality(cfg, data):
             "coveragePct": coverage,
             "asOfDates": dates,
             "status": "complete" if len(quotes) == len(expected) else "partial",
+            # 최신 세션 봉을 못 받아 직전 봉(실제 기준일)으로 표시한 종목 — annotate_lag가 표시.
+            "lagging": [
+                {"ticker": q.get("ticker"), "name": q.get("name"), "asOf": q.get("date"), "expected": q.get("expected_date")}
+                for q in quotes if q.get("lagging")
+            ],
         }
 
     return {
@@ -323,7 +479,7 @@ def build_series(cfg, period="1y", now=None):
     for item in items:
         t = item["ticker"]
         try:
-            hist = _completed_bars(_hist(t, period=period), t, now)
+            hist = _completed_bars(_hist(t, period=period, now=now), t, now)
             if hist is None:
                 continue
             arr = []
@@ -387,7 +543,7 @@ def fetch_fng():
         return None
 
 
-def build_sentiment(cfg, data):
+def build_sentiment(cfg, data, now=None):
     """상단 '시장 분위기'용 데이터: 섹터 ETF 등락(미/한) + CNN 탐욕지수.
     네트워크 실패로 일부가 비어도 직전 sentiment.json 값을 유지하되, 재사용한 섹터는
     usStale/krStale와 원래 기준일(usAsOf/krAsOf)을 남겨 옛 값이 오늘 것처럼 보이지 않게 한다.
@@ -401,10 +557,16 @@ def build_sentiment(cfg, data):
             prev = {}
 
     def slim(quotes):
-        return [{"ticker": q["ticker"], "name": q["name"], "change_pct": q["change_pct"]} for q in quotes]
+        return [{"ticker": q["ticker"], "name": q["name"], "change_pct": q["change_pct"], "date": q.get("date")}
+                for q in quotes]
 
-    us = slim(fetch_quotes(cfg.get("breadth_us", [])))
-    kr = slim(fetch_quotes(cfg.get("breadth_kr", [])))
+    now = now or datetime.now(KST)
+    us_raw = fetch_quotes(cfg.get("breadth_us", []), now)
+    kr_raw = fetch_quotes(cfg.get("breadth_kr", []), now)
+    # 같은 시장의 관심종목·지수 시세와 함께 '최신 세션'을 합의해, 섹터 ETF만 하루 밀린 경우를 잡는다.
+    peers = [dict(q) for g in ("indices", "watchlist_us", "watchlist_kr") for q in data.get(g, [])]
+    annotate_lag(peers + us_raw + kr_raw, now)
+    us, kr = slim(us_raw), slim(kr_raw)
     fng = fetch_fng()
 
     today = data["date_kst"]
@@ -415,11 +577,17 @@ def build_sentiment(cfg, data):
     for key, fresh in (("us", us), ("kr", kr)):
         if fresh:
             out[key], out[f"{key}AsOf"], out[f"{key}Stale"] = fresh, today, False
+            # 실제 시세 기준일(수집일 asOf와 별개). 최신 세션을 못 받은 ETF가 있으면 그 기준일을 밝힌다.
+            out[f"{key}Dates"] = sorted({q["date"] for q in fresh if q.get("date")})
+            lag = sorted({q["date"] for q, raw in zip(fresh, us_raw if key == "us" else kr_raw) if raw.get("lagging")})
+            out[f"{key}LagDates"] = lag
             continue
         old = prev.get(key, [])
         out[key] = old
         out[f"{key}AsOf"] = (prev.get(f"{key}AsOf") or prev.get("asOf")) if old else None
         out[f"{key}Stale"] = bool(old)
+        out[f"{key}Dates"] = prev.get(f"{key}Dates", []) if old else []
+        out[f"{key}LagDates"] = prev.get(f"{key}LagDates", []) if old else []
         if old:
             print(f"[warn] sentiment {key}: 이번 수집 0건 — {out[f'{key}AsOf']} 기준 값 재사용(stale)")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -550,13 +718,15 @@ def main():
         "watchlist_kr": fetch_quotes(cfg["watchlist_kr"], now),
         "news": fetch_news(cfg["news_queries"], cfg.get("news_per_query", 5), cfg.get("news_max_age_hours", 72)),
     }
+    # 종목별 '진짜 기준일' 점검 — 최신 세션 봉을 못 받은 시세는 lagging/expected_date로 표시(브리핑·사이트가 밝힘).
+    annotate_lag(data["indices"] + data["watchlist_us"] + data["watchlist_kr"], now)
     out = ROOT / "data.json"
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     # series를 먼저 받아, 같은 완결 일봉으로 history의 과거 장중가 저장분까지 교정한다.
     series = build_series(cfg, now=now)
     if data["indices"] or data["watchlist_us"] or data["watchlist_kr"]:
         update_history(data, series=series)
-    breadth = build_sentiment(cfg, data)
+    breadth = build_sentiment(cfg, data, now)
     build_news(data)
     build_event_ledger(data)
     write_quality(cfg, data, breadth)

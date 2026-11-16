@@ -70,6 +70,7 @@ PROMPT_TEMPLATE = """당신은 한국 개인투자자를 위한 아침 시장 �
 {news}
 
 [분석 원칙]
+- 시세마다 붙은 '기준일'을 지킨다. "⚠ 최신 세션 미수신"이 붙은 종목은 그 기준일(직전 세션)의 값이므로 '밤사이'·'어제' 움직임으로 쓰지 말고, 언급할 때 반드시 "(N월 N일 기준)"처럼 실제 기준일을 밝힌다. 종목마다 기준일이 다르면 표에도 기준일을 적는다.
 - 제공된 데이터에 없는 수치(장중 고저, RSI·MACD 등 보조지표, 거래량 등)는 절대 지어내지 말 것. 오직 종가·등락률·시장 분위기·헤드라인이 담은 정보만 사용한다.
 - 헤드라인으로 확인되지 않는 원인은 "~로 추정"이라고 명시하고, 상관(같이 움직임)과 인과(원인-결과)를 구분한다. 기사 제목만으로 확정할 수 없는 세부 수치·일정·수급·실적·목표가는 쓰지 않는다.
 - 뉴스에서 가져온 고유 사실 또는 해석 문장 끝에는 제공된 기사 ID만 사용해 [N01]처럼 인용한다. 존재하지 않는 기사 ID를 만들지 말고, 인용할 근거가 없으면 그 사실을 삭제한다.
@@ -127,6 +128,8 @@ def build_mood(sent):
     for key, label in (("us", "미국 섹터"), ("kr", "한국 섹터")):
         if sent.get(f"{key}Stale"):
             label += f"(기준일 {sent.get(f'{key}AsOf')} — 최신 수집 실패, 오늘 흐름 아님)"
+        elif sent.get(f"{key}LagDates"):
+            label += f"(일부 ETF는 {', '.join(sent[f'{key}LagDates'])} 기준 — 최신 세션 미수신)"
         _ranked(label, sent.get(key))
     return "\n".join(lines) or "(시장 분위기 데이터 없음)"
 
@@ -159,11 +162,20 @@ def build_news_evidence(data):
     return evidence
 
 
+def _date_note(q):
+    """프롬프트·폴백 표의 기준일 표기. 최신 세션 봉을 못 받은 시세(fetch_data.annotate_lag)는
+    그 사실과 받지 못한 세션 날짜를 함께 밝혀, 직전 세션 값이 '오늘/밤사이' 값처럼 읽히지 않게 한다."""
+    if q.get("lagging"):
+        return (f"기준일 {q['date']} ⚠ 최신 세션 미수신 — {q.get('expected_date')} 세션 시세를 받지 못해 "
+                f"{q['date']} 값임, 밤사이 움직임 아님")
+    return f"기준일 {q['date']}"
+
+
 def build_prompt(data, cfg):
     quotes = []
     for group, label in [("indices", "지수/환율"), ("watchlist_us", "미국 관심종목"), ("watchlist_kr", "한국 관심종목")]:
         for q in data[group]:
-            quotes.append(f"- [{label}] {q['name']}({q['ticker']}): {q['close']:,} ({q['change_pct']:+.2f}%, 기준일 {q['date']})")
+            quotes.append(f"- [{label}] {q['name']}({q['ticker']}): {q['close']:,} ({q['change_pct']:+.2f}%, {_date_note(q)})")
     evidence = build_news_evidence(data)
     news = [f"- [{n['id']}] ({n['source']}) {n['title']}" for n in evidence]
     prompt = PROMPT_TEMPLATE.format(
@@ -462,10 +474,13 @@ def call_anthropic(prompt, cfg, key):
 def fallback_briefing(data):
     """LLM 키가 없을 때: 데이터만으로 표 중심 브리핑"""
     lines = ["## ⏱ 시세 요약 (LLM 미설정 — 데이터만 표시)\n"]
-    lines.append("| 구분 | 종가 | 등락 |\n|---|---|---|")
+    lines.append("| 구분 | 종가 | 등락 | 기준일 |\n|---|---|---|---|")
     for group in ("indices", "watchlist_us", "watchlist_kr"):
         for q in data[group]:
-            lines.append(f"| {q['name']} | {q['close']:,} | {q['change_pct']:+.2f}% |")
+            when = q.get("date", "")
+            if q.get("lagging"):
+                when += f" (최신 {q.get('expected_date')} 세션 미수신)"
+            lines.append(f"| {q['name']} | {q['close']:,} | {q['change_pct']:+.2f}% | {when} |")
     lines.append("\n## 주요 헤드라인\n")
     for n in data["news"][:15]:
         lines.append(f"- [{n['title']}]({n['link']})")
