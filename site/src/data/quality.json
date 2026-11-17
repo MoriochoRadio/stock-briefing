@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-14T11:21:31.257991+09:00",
-  "dateKst": "2026-11-14",
+  "generatedAt": "2026-11-17T13:27:02.381827+09:00",
+  "dateKst": "2026-11-17",
   "source": "Yahoo Finance via yfinance",
   "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
   "newsSource": "Google News RSS",
@@ -13,9 +13,11 @@
       "received": 5,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-11-13"
+        "2026-11-16",
+        "2026-11-17"
       ],
-      "status": "complete"
+      "status": "complete",
+      "lagging": []
     },
     "watchlist_us": {
       "label": "미국 관심종목",
@@ -23,9 +25,10 @@
       "received": 6,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-11-13"
+        "2026-11-16"
       ],
-      "status": "complete"
+      "status": "complete",
+      "lagging": []
     },
     "watchlist_kr": {
       "label": "한국 관심종목",
@@ -33,16 +36,17 @@
       "received": 4,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-11-13"
+        "2026-11-16"
       ],
-      "status": "complete"
+      "status": "complete",
+      "lagging": []
     }
   },
   "zeroStreaks": {},
   "llm": {
-    "engine": "Gemini (gemini-2.5-flash)",
-    "model": "gemini-2.5-flash",
-    "generatedAt": "2026-11-14T11:22:26.357994+09:00",
+    "engine": "없음",
+    "model": null,
+    "generatedAt": "2026-11-17T13:29:39.429646+09:00",
     "alerts": []
   }
 }
