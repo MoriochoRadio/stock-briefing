@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-20T12:05:55.868255+09:00",
-  "dateKst": "2026-11-20",
+  "generatedAt": "2026-11-21T12:10:22.678441+09:00",
+  "dateKst": "2026-11-21",
   "source": "Yahoo Finance via yfinance",
   "quoteNotice": "종가·등락률은 Yahoo Finance(yfinance) 기준이며, 거래소 공식 실시간 시세가 아니고 지연·정정될 수 있습니다.",
   "newsSource": "Google News RSS",
@@ -13,7 +13,6 @@
       "received": 5,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-11-19",
         "2026-11-20"
       ],
       "status": "complete",
@@ -25,7 +24,7 @@
       "received": 6,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-11-19"
+        "2026-11-20"
       ],
       "status": "complete",
       "lagging": []
@@ -36,7 +35,7 @@
       "received": 4,
       "coveragePct": 100.0,
       "asOfDates": [
-        "2026-11-19"
+        "2026-11-20"
       ],
       "status": "complete",
       "lagging": []
@@ -44,9 +43,9 @@
   },
   "zeroStreaks": {},
   "llm": {
-    "engine": "Gemini (gemini-3.8-flash)",
-    "model": "gemini-3.8-flash",
-    "generatedAt": "2026-11-20T12:07:26.340485+09:00",
+    "engine": "없음",
+    "model": null,
+    "generatedAt": "2026-11-21T12:14:37.320195+09:00",
     "alerts": []
   }
 }
